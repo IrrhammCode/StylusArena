@@ -183,7 +183,7 @@ app.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║                                                   ║
-║   🚀 StylusForge Backend Running                  ║
+║   🚀 StylusArena Backend Running                  ║
 ║                                                   ║
 ║   📍 URL: http://localhost:${PORT}                  ║
 ║                                                   ║

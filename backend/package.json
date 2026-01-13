@@ -1,7 +1,7 @@
 {
-    "name": "stylusforge-backend",
+    "name": "stylusarena-backend",
     "version": "1.0.0",
-    "description": "StylusForge AI Training Backend",
+    "description": "StylusArena AI Training Backend",
     "main": "src/index.ts",
     "scripts": {
         "dev": "tsx watch src/index.ts",

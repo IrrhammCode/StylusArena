@@ -1,4 +1,4 @@
-//! StylusForge AI Agent Registry
+//! StylusArena AI Agent Registry
 //!
 //! Manages AI agents trained through gaming on Arbitrum.
 

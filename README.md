@@ -1,4 +1,4 @@
-# 🎮 StylusForge
+# 🎮 StylusArena
 
 > **Train AI Agents Through Games, Deploy to Arbitrum**
 
@@ -7,12 +7,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 <p align="center">
-  <img src="./docs/banner.png" alt="StylusForge Banner" width="800"/>
+  <img src="./docs/banner.png" alt="StylusArena Banner" width="800"/>
 </p>
 
 ## 🌟 Overview
 
-**StylusForge** is a gamified AI training platform that allows users to train autonomous agents through interactive games, then deploy them as on-chain agents on Arbitrum using Stylus smart contracts.
+**StylusArena** is a gamified AI training platform that allows users to train autonomous agents through interactive games, then deploy them as on-chain agents on Arbitrum using Stylus smart contracts.
 
 ### The Concept
 
@@ -70,8 +70,8 @@ graph LR
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/StylusForge.git
-cd StylusForge
+git clone https://github.com/yourusername/StylusArena.git
+cd StylusArena
 
 # Install frontend dependencies
 cd frontend
@@ -101,7 +101,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## 📁 Project Structure
 
 ```
-StylusForge/
+StylusArena/
 ├── frontend/           # Next.js frontend application
 │   ├── app/
 │   │   ├── games/      # 6 training games
