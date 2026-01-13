@@ -201,7 +201,7 @@ contract StylusArena {
      * @notice Add XP to user profile
      * @param _amount Amount of XP to add
      */
-    function addXP(uint256 _amount) external hasProfileCheck {
+    function addXP(uint256 _amount) public hasProfileCheck {
         UserProfile storage profile = profiles[msg.sender];
         profile.xp += _amount;
         profile.totalXP += _amount;
@@ -219,7 +219,7 @@ contract StylusArena {
      * @notice Update game stats
      * @param _won Whether the game was won
      */
-    function updateGameStats(bool _won) external hasProfileCheck {
+    function updateGameStats(bool _won) public hasProfileCheck {
         UserProfile storage profile = profiles[msg.sender];
         profile.gamesPlayed++;
         profile.lastActiveAt = block.timestamp;
@@ -236,7 +236,7 @@ contract StylusArena {
      * @param _trained Whether an agent was trained
      * @param _deployed Whether an agent was deployed
      */
-    function updateAgentStats(bool _trained, bool _deployed) external hasProfileCheck {
+    function updateAgentStats(bool _trained, bool _deployed) public hasProfileCheck {
         UserProfile storage profile = profiles[msg.sender];
         profile.lastActiveAt = block.timestamp;
         
@@ -399,7 +399,8 @@ contract StylusArena {
         tournament.status = 2; // completed
         
         // Transfer prize (simplified - in production, use proper distribution)
-        payable(_winner).transfer(tournament.prizePool);
+        (bool success, ) = payable(_winner).call{value: tournament.prizePool}("");
+        require(success, "Transfer failed");
     }
     
     // ============ BATTLE FUNCTIONS ============
@@ -458,7 +459,8 @@ contract StylusArena {
         }
         
         // Transfer prize
-        payable(_winner).transfer(battle.prize);
+        (bool success, ) = payable(_winner).call{value: battle.prize}("");
+        require(success, "Transfer failed");
         
         emit BattleCompleted(_battleId, _winner);
     }
@@ -527,7 +529,8 @@ contract StylusArena {
      * @notice Withdraw funds (owner only)
      */
     function withdraw() external onlyOwner {
-        payable(owner).transfer(address(this).balance);
+        (bool success, ) = payable(owner).call{value: address(this).balance}("");
+        require(success, "Withdraw failed");
     }
     
     // ============ AGENT MANAGEMENT FUNCTIONS ============
@@ -658,11 +661,13 @@ contract StylusArena {
         userAgents[msg.sender].push(listing.agent);
         
         // Transfer payment
-        payable(listing.seller).transfer(listing.price);
+        (bool success, ) = payable(listing.seller).call{value: listing.price}("");
+        require(success, "Transfer failed");
         
         // Refund excess
         if (msg.value > listing.price) {
-            payable(msg.sender).transfer(msg.value - listing.price);
+        (bool successRefund, ) = payable(msg.sender).call{value: msg.value - listing.price}("");
+        require(successRefund, "Refund failed");
         }
         
         listing.isActive = false;

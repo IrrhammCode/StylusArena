@@ -146,12 +146,18 @@ pub fn update_performance(
 ) -> Result<(), Vec<u8>>
 ```
 
-### Deploy to Arbitrum Sepolia
+### Deployed Contract (Arbitrum Sepolia)
+- **Address**: `0xa4aEECf0BAdB3c767a7138BD9A6a85a9aBf3Cc3a`
+- **Method**: Remix IDE (Solidity)
+- **Status**: Verified
+
+### Local Development (Stylus)
+For future Stylus (Rust) development:
 
 ```bash
 cd contracts/stylus
 cargo stylus check
-cargo stylus deploy --private-key <KEY> --endpoint https://sepolia-rollup.arbitrum.io/rpc
+# cargo stylus deploy --private-key <KEY> --endpoint https://sepolia-rollup.arbitrum.io/rpc
 ```
 
 ---

@@ -9,6 +9,8 @@ stylus-sdk = "0.6.0"
 alloy-primitives = "0.7"
 alloy-sol-types = "0.7"
 mini-alloc = "0.6.0"
+ruint = "=1.17.0"
+base64ct = "=1.6.0"
 
 [features]
 export-abi = ["stylus-sdk/export-abi"]
