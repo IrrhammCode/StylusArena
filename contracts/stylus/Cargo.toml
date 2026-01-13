@@ -1,0 +1,28 @@
+[package]
+name = "stylus-agent-registry"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+stylus-sdk = "0.6.0"
+alloy-primitives = "0.7"
+alloy-sol-types = "0.7"
+mini-alloc = "0.6.0"
+
+[features]
+export-abi = ["stylus-sdk/export-abi"]
+
+[[bin]]
+name = "stylus-agent-registry"
+path = "src/main.rs"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[profile.release]
+codegen-units = 1
+strip = true
+lto = true
+panic = "abort"
+opt-level = "s"

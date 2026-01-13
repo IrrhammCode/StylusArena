@@ -1,0 +1,20 @@
+warning: unused import: `block`
+  --> src/lib.rs:12:10
+   |
+12 |     msg, block,
+   |          ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `stylus-agent-registry` (lib) generated 1 warning (run `cargo fix --lib -p stylus-agent-registry` to apply 1 suggestion)
+    Checking stylus-agent-registry v0.1.0 (/mnt/d/code/StylusForge/contracts/stylus)
+warning: unused import: `stylus_agent_registry::AgentRegistry`
+ --> src/main.rs:1:5
+  |
+1 | use stylus_agent_registry::AgentRegistry;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: `stylus-agent-registry` (bin "stylus-agent-registry") generated 1 warning (run `cargo fix --bin "stylus-agent-registry"` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.00s

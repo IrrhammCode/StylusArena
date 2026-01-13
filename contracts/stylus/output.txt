@@ -1,0 +1,18 @@
+warning: unused import: `block`
+  --> src/lib.rs:12:10
+   |
+12 |     msg, block,
+   |          ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: `stylus-agent-registry` (lib) generated 1 warning (run `cargo fix --lib -p stylus-agent-registry` to apply 1 suggestion)
+    Checking stylus-agent-registry v0.1.0 (/mnt/d/code/StylusForge/contracts/stylus)
+error[E0601]: `main` function not found in crate `stylus_agent_registry`
+ --> src/main.rs:7:2
+  |
+7 | }
+  |  ^ consider adding a `main` function to `src/main.rs`
+
+For more information about this error, try `rustc --explain E0601`.
+error: could not compile `stylus-agent-registry` (bin "stylus-agent-registry") due to 1 previous error

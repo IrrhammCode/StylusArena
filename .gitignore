@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env*.local
+# But keep .env.example files
+!.env.example
+!.env.local.example
+
+# Logs
+*.log
+logs/
+backend-ts/logs/
+backend-ts/data/
+# Note: Log files and data folder are in .gitignore but may still exist locally
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.vercel/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Contracts
+contracts/artifacts/
+contracts/cache/
+contracts/.env
+contracts/deployment.json
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Documentation (keep only essential)
+# Temporary/duplicate docs removed
+
+
+# Rust
+**/target/
+
+# Rust
+**/target/
