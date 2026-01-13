@@ -1,0 +1,21 @@
+   Compiling stylus-sdk v0.6.1
+error[E0080]: evaluation of `alloy_primitives::ruint::bytes::<impl alloy_primitives::Uint<8, 1>>::to_le_bytes::<32>::{constant#1}` failed
+  --> /home/ayden/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ruint-1.17.2/src/bytes.rs:96:17
+   |
+96 |         const { Self::assert_bytes(BYTES) }
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation panicked: BYTES must be equal to Self::BYTES
+
+note: erroneous constant encountered
+  --> /home/ayden/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ruint-1.17.2/src/bytes.rs:96:9
+   |
+96 |         const { Self::assert_bytes(BYTES) }
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+note: the above error was encountered while instantiating `fn alloy_primitives::ruint::bytes::<impl alloy_primitives::Uint<8, 1>>::to_le_bytes::<32>`
+   --> /home/ayden/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ruint-1.17.2/src/bytes.rs:151:25
+    |
+151 |         let mut bytes = self.to_le_bytes::<BYTES>();
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0080`.
+error: could not compile `stylus-sdk` (lib) due to 1 previous error
