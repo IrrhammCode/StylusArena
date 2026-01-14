@@ -42,6 +42,15 @@ export default function RacingGamePage() {
   const [isGameOver, setIsGameOver] = useState(false)
   const gameAudioRef = useRef<any>(null)
 
+  // AI Autopilot State
+  const [isAIPlaying, setIsAIPlaying] = useState(false)
+
+  // Ref to access current state inside Phaser closure
+  const isAIPlayingRef = useRef(isAIPlaying)
+  useEffect(() => {
+    isAIPlayingRef.current = isAIPlaying
+  }, [isAIPlaying])
+
   useEffect(() => {
     if (!gameRef.current || phaserGameRef.current) return
 
@@ -199,15 +208,63 @@ export default function RacingGamePage() {
             // Scroll road for motion effect
             road.tilePositionY -= speed * 2
 
+            // AI Logic
+            const aiActive = isAIPlayingRef.current;
+            let aiMove = 0;
+
+            if (aiActive) {
+              // Find closest threat
+              let closestObstacle: any = null
+              let minDist = 1000
+
+              obstacles.forEach((obs: any) => {
+                const dist = player.y - obs.y
+                // dist is positive if player is below obstacle (normal)
+                // We want obstacles ABOVE player, so obs.y < player.y.
+                // Wait, player Y is 500. Obstacles start at -50 and go UP to 600+. 
+                // So we want obstacles with Y < 500, but closest to 500.
+
+                // Phaser coordinates: 0 is top. 600 is bottom.
+                // Player is at 500.
+                // Obstacles spawn at -50 (top) and move down (increment Y).
+                // So we look for obstacles with Y < 500.
+
+                const diff = player.y - obs.y // Positive means obstacle is above player
+                if (diff > 0 && diff < minDist) {
+                  minDist = diff
+                  closestObstacle = obs
+                }
+              })
+
+              if (closestObstacle && minDist < 250) { // React when obstacle is within 250px
+                // Avoidance logic
+                const dx = player.x - closestObstacle.x
+                if (Math.abs(dx) < 80) { // If horizontally overlapping
+                  // Too close! Move away
+                  if (dx > 0) aiMove = 1 // Player is to the right of obstacle, move right
+                  else aiMove = -1       // Player is to the left, move left
+                } else {
+                  // Safe from immediate threat.
+                  // Simple centering behavior to avoid hugging walls
+                  if (player.x < 300) aiMove = 0.3
+                  else if (player.x > 500) aiMove = -0.3
+                }
+              } else {
+                // No immediate threat, slightly drift to center
+                if (player.x < 380) aiMove = 0.2
+                else if (player.x > 420) aiMove = -0.2
+              }
+            }
+
             // Move player with tilt effect
-            if (cursors?.left.isDown || wasd?.A.isDown) {
-              player.x -= 6
+            if ((cursors?.left.isDown || wasd?.A.isDown || aiMove < 0)) {
+              player.x -= aiActive ? 4 : 6 // AI moves slightly smoother
               player.setAngle(-10)
-              recordAction('move_left')
-            } else if (cursors?.right.isDown || wasd?.D.isDown) {
-              player.x += 6
+              if (!aiActive) recordAction('move_left')
+            } else if ((cursors?.right.isDown || wasd?.D.isDown || aiMove > 0)) {
+              player.x += aiActive ? 4 : 6
               player.setAngle(10)
-              recordAction('move_right')
+              if (!aiActive) recordAction('move_right')
             } else {
               player.setAngle(0)
             }
@@ -416,6 +473,9 @@ export default function RacingGamePage() {
     setIsPlaying(false)
     setGameplayData([])
 
+    // Also reset AI mode
+    setIsAIPlaying(false)
+
     // Destroy existing game
     if (phaserGameRef.current) {
       phaserGameRef.current.destroy(true)
@@ -543,6 +603,23 @@ export default function RacingGamePage() {
                 <div ref={gameRef} className="shadow-2xl" />
               </div>
 
+              {/* AI Active Indicator */}
+              <AnimatePresence>
+                {isAIPlaying && !isGameOver && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute top-10 w-full flex justify-center pointer-events-none"
+                  >
+                    <div className="bg-purple-600/80 backdrop-blur border border-purple-400 text-white px-6 py-2 rounded-full font-bold font-mono flex items-center gap-2 shadow-[0_0_20px_rgba(147,51,234,0.5)]">
+                      <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+                      AI AUTOPILOT ENGAGED
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Game Over Overlay */}
               <AnimatePresence>
                 {isGameOver && (
@@ -622,7 +699,7 @@ export default function RacingGamePage() {
                 <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
                 AI Context
               </h3>
-              <p className="text-sm text-gray-300 leading-relaxed mb-4">
+              <p className="text-sm text-gray-300 leading-relaxed max-w-sm mb-4">
                 This simulation trains decision-making for high-frequency trading.
                 <br /><br />
                 <strong className="text-white">Obstacles</strong> = Market Crushes<br />
@@ -671,7 +748,29 @@ export default function RacingGamePage() {
                 )}
               </div>
 
-              <div className="p-4 border-t border-[#1A1F3A]">
+              <div className="p-4 border-t border-[#1A1F3A] space-y-3">
+                {/* AI Autopilot Toggle */}
+                <button
+                  onClick={() => setIsAIPlaying(!isAIPlaying)}
+                  disabled={!isPlaying}
+                  className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
+                      ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                      : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                    }`}
+                >
+                  {isAIPlaying ? (
+                    <>
+                      <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                      AI DRIVING...
+                    </>
+                  ) : (
+                    <>
+                      <span>🤖</span>
+                      Watch AI Play
+                    </>
+                  )}
+                </button>
+
                 <button
                   onClick={handleStartTraining}
                   disabled={gameplayData.length === 0 || isTraining}
@@ -705,4 +804,3 @@ export default function RacingGamePage() {
     </div>
   )
 }
-

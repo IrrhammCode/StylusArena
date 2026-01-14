@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { GameAudio } from '../../../lib/gameAudio'
+import { ZapIcon } from '../../components/Icons'
 
 export default function BattleGamePage() {
   const gameRef = useRef<HTMLDivElement>(null)
@@ -22,6 +23,9 @@ export default function BattleGamePage() {
   const [multiplier, setMultiplier] = useState(1)
   const [isGameOver, setIsGameOver] = useState(false)
 
+  // AI Autopilot State
+  const [isAIPlaying, setIsAIPlaying] = useState(false)
+
   // Use window-level functions for Phaser communication
   const handleAttack = () => {
     if ((window as any).gameAttack) (window as any).gameAttack()
@@ -32,6 +36,44 @@ export default function BattleGamePage() {
   const handleUltimate = () => {
     if ((window as any).gameUltimate) (window as any).gameUltimate()
   }
+
+  // AI Logic Loop
+  useEffect(() => {
+    if (!isAIPlaying || isGameOver) return
+
+    const thinkInterval = setInterval(() => {
+      if (isGameOver) {
+        setIsAIPlaying(false)
+        return
+      }
+
+      // Decision Tree
+      // 1. Critical Health -> Defend
+      if (health < 40 && resources >= 10) {
+        handleDefend()
+        return
+      }
+
+      // 2. Max Energy -> Ultimate
+      if (resources >= 50) {
+        // 20% chance to wait for better moment (simulating "strategy")
+        if (Math.random() > 0.2) {
+          handleUltimate()
+          return
+        }
+      }
+
+      // 3. Normal Attack
+      if (resources >= 15) {
+        handleAttack()
+      }
+
+      // 4. Low Energy -> Wait (Do nothing)
+
+    }, 1500 + Math.random() * 1000) // Random think time 1.5s - 2.5s
+
+    return () => clearInterval(thinkInterval)
+  }, [isAIPlaying, isGameOver, health, resources])
 
   useEffect(() => {
     if (!gameRef.current) return
@@ -247,6 +289,8 @@ export default function BattleGamePage() {
                 scene.scene.pause()
                 gameAudioRef.current?.playSound('error')
                 setIsGameOver(true)
+                // Stop AI if game over
+                setIsAIPlaying(false)
               }
             }
 
@@ -489,6 +533,22 @@ export default function BattleGamePage() {
           <div ref={gameRef} style={{ width: '800px', height: '500px', margin: '0 auto' }} />
 
           <AnimatePresence>
+            {isAIPlaying && !isGameOver && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                className="absolute top-4 w-full flex justify-center pointer-events-none"
+              >
+                <div className="bg-purple-600/80 backdrop-blur border border-purple-400 text-white px-6 py-2 rounded-full font-bold font-mono flex items-center gap-2 shadow-[0_0_20px_rgba(147,51,234,0.5)]">
+                  <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+                  AI COMBAT MODE ENGAGED
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
             {isGameOver && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="absolute inset-0 bg-black/80 flex items-center justify-center">
@@ -507,13 +567,37 @@ export default function BattleGamePage() {
           </AnimatePresence>
         </div>
 
+        {/* AI Toggle */}
+        <div className="mb-4">
+          <button
+            onClick={() => setIsAIPlaying(!isAIPlaying)}
+            disabled={isGameOver}
+            className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
+                ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+              }`}
+          >
+            {isAIPlaying ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                AI PLAYING...
+              </>
+            ) : (
+              <>
+                <ZapIcon className="w-5 h-5" />
+                Watch AI Play
+              </>
+            )}
+          </button>
+        </div>
+
         {/* Action Buttons */}
         <div className="grid grid-cols-3 gap-3">
           <motion.button
             whileHover={{ scale: 1.03, y: -3 }}
             whileTap={{ scale: 0.97 }}
             onClick={handleAttack}
-            disabled={resources < 15 || isGameOver}
+            disabled={resources < 15 || isGameOver || isAIPlaying}
             className="py-6 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-center shadow-lg shadow-cyan-500/30 transition-all"
           >
             <div className="text-4xl mb-2">⚔️</div>
@@ -525,7 +609,7 @@ export default function BattleGamePage() {
             whileHover={{ scale: 1.03, y: -3 }}
             whileTap={{ scale: 0.97 }}
             onClick={handleDefend}
-            disabled={resources < 10 || isGameOver}
+            disabled={resources < 10 || isGameOver || isAIPlaying}
             className="py-6 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-center shadow-lg shadow-green-500/30 transition-all"
           >
             <div className="text-4xl mb-2">🛡️</div>
@@ -537,7 +621,7 @@ export default function BattleGamePage() {
             whileHover={{ scale: 1.03, y: -3 }}
             whileTap={{ scale: 0.97 }}
             onClick={handleUltimate}
-            disabled={resources < 50 || isGameOver}
+            disabled={resources < 50 || isGameOver || isAIPlaying}
             className="py-6 bg-gradient-to-r from-purple-600 to-pink-500 hover:from-purple-500 hover:to-pink-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-center shadow-lg shadow-purple-500/30 transition-all"
           >
             <div className="text-4xl mb-2">💥</div>

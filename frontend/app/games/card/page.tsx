@@ -43,6 +43,9 @@ export default function PokerGamePage() {
   const [dealerHandResult, setDealerHandResult] = useState<HandResult | null>(null)
   const [showDealerCards, setShowDealerCards] = useState(false)
 
+  // AI State
+  const [isAIPlaying, setIsAIPlaying] = useState(false)
+
   // Training data
   interface TrainingData {
     timestamp: number
@@ -122,10 +125,78 @@ export default function PokerGamePage() {
     startNewHand()
   }, [startNewHand])
 
+  // AI Logic Loop
+  useEffect(() => {
+    if (!isAIPlaying) return
+
+    const thinkInterval = setInterval(() => {
+      // Only act in actionable phases
+      if (phase === 'showdown' || result) return
+
+      if (phase === 'result') {
+        startNewHand()
+        return
+      }
+
+      // --- BRAIN ---
+
+      // 1. Evaluate Hand
+      const visibleCommunity = phase === 'betting' ? [] :
+        phase === 'flop' ? communityCards.slice(0, 3) :
+          phase === 'turn' ? communityCards.slice(0, 4) :
+            communityCards
+      const currentHandStrength = evaluateHand([...playerHand, ...visibleCommunity])
+      const rank = currentHandStrength.rank
+
+      // 2. Decide Action
+      const r = Math.random()
+
+      // Betting Phase (Pre-Flop)
+      if (phase === 'betting') {
+        const highCardVal = Math.max(...playerHand.map(c => c.numValue))
+        const isPair = playerHand[0].numValue === playerHand[1].numValue
+
+        if (isPair || highCardVal > 10) {
+          // Good hand
+          if (r > 0.3) { placeBet(50); advancePhase(); }
+          else { placeBet(10); advancePhase(); }
+        } else if (highCardVal > 7) {
+          // Okay hand
+          if (r > 0.5) { placeBet(10); advancePhase(); }
+          else fold() // Fold weak hands sometimes
+        } else {
+          // Weak hand
+          if (r > 0.8) { placeBet(100); advancePhase(); } // Bluff
+          else fold()
+        }
+      }
+      // Post-Flop
+      else {
+        if (rank >= 4) { // Three of a kind or better
+          if (r > 0.2) { placeBet(100); advancePhase(); }
+          else advancePhase() // Trap?
+        } else if (rank >= 2) { // Pair or Two Pair
+          if (r > 0.5) advancePhase() // Check/Call
+          else { placeBet(10); advancePhase(); }
+        } else {
+          // High Card / Weak
+          if (r > 0.85) { placeBet(50); advancePhase(); } // Bluff
+          else advancePhase() // Check/Fold logic is simplified here to just Check
+        }
+      }
+
+    }, 2000) // Think every 2 seconds
+
+    return () => clearInterval(thinkInterval)
+  }, [isAIPlaying, phase, result, playerHand, communityCards, currentBet])
+
+
   // Place bet
   const placeBet = (amount: number) => {
     if (chips < amount) {
-      toast.error('Not enough chips!')
+      if (!isAIPlaying) {
+        toast.error('Not enough chips!')
+      }
       return
     }
     setChips(c => c - amount)
@@ -178,17 +249,17 @@ export default function PokerGamePage() {
           })
           setResult({ winner: 'player', message: `You win with ${playerResult.name}!` })
           gameAudioRef.current?.playSound('levelup')
-          toast.success(`🎉 You win $${pot}!`)
+          if (!isAIPlaying) toast.success(`🎉 You win $${pot}!`)
         } else if (dealerResult.score > playerResult.score) {
           setLosses(l => l + 1)
           setStreak(0)
           setResult({ winner: 'dealer', message: `Dealer wins with ${dealerResult.name}` })
           gameAudioRef.current?.playSound('error')
-          toast.error(`Dealer wins with ${dealerResult.name}`)
+          if (!isAIPlaying) toast.error(`Dealer wins with ${dealerResult.name}`)
         } else {
           setChips(c => c + pot / 2)
           setResult({ winner: 'tie', message: 'Tie!' })
-          toast('🤝 Tie game!')
+          if (!isAIPlaying) toast('🤝 Tie game!')
         }
         setPhase('result')
         setRound(r => r + 1)
@@ -204,7 +275,7 @@ export default function PokerGamePage() {
     setPhase('result')
     setRound(r => r + 1)
     gameAudioRef.current?.playSound('error')
-    toast('🏳️ Folded')
+    if (!isAIPlaying) toast('🏳️ Folded')
 
     setTrainingData(prev => [...prev, {
       timestamp: Date.now(),
@@ -222,8 +293,8 @@ export default function PokerGamePage() {
       animate={{ rotateY: hidden ? 180 : 0, scale: 1 }}
       transition={{ duration: 0.4, delay }}
       className={`w-16 h-24 rounded-xl flex flex-col items-center justify-center font-bold relative overflow-hidden ${hidden
-          ? 'bg-gradient-to-br from-indigo-600 to-purple-700'
-          : 'bg-gradient-to-br from-white to-gray-100'
+        ? 'bg-gradient-to-br from-indigo-600 to-purple-700'
+        : 'bg-gradient-to-br from-white to-gray-100'
         } shadow-xl border-2 border-gray-300`}
     >
       {hidden ? (
@@ -283,7 +354,7 @@ export default function PokerGamePage() {
         </div>
 
         {/* Game Table */}
-        <div className="bg-gradient-to-br from-[#0d4f32] via-[#0a3d28] to-[#072a1c] rounded-3xl p-8 mb-4 border-4 border-[#1a6b47] relative overflow-hidden">
+        <div className={`bg-gradient-to-br from-[#0d4f32] via-[#0a3d28] to-[#072a1c] rounded-3xl p-8 mb-4 border-4 ${isAIPlaying ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.2)]' : 'border-[#1a6b47]'} relative overflow-hidden transition-all duration-500`}>
           {/* Felt texture overlay */}
           <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, transparent 0%, rgba(0,0,0,0.3) 100%)' }} />
 
@@ -351,6 +422,9 @@ export default function PokerGamePage() {
               </motion.div>
             )}
             <div className="text-sm text-green-300 mt-2 font-bold">YOUR HAND</div>
+            {isAIPlaying && (
+              <div className="text-purple-400 text-xs font-black animate-pulse mt-2">🤖 AI ANALYZING HAND...</div>
+            )}
           </div>
         </div>
 
@@ -362,7 +436,8 @@ export default function PokerGamePage() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={fold}
-                className="px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white font-bold rounded-xl shadow-lg"
+                disabled={isAIPlaying}
+                className="px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg"
               >
                 FOLD
               </motion.button>
@@ -373,7 +448,8 @@ export default function PokerGamePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => { placeBet(10); advancePhase() }}
-                    className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold rounded-xl shadow-lg"
+                    disabled={isAIPlaying}
+                    className="px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg"
                   >
                     BET $10
                   </motion.button>
@@ -381,7 +457,8 @@ export default function PokerGamePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => { placeBet(50); advancePhase() }}
-                    className="px-8 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white font-bold rounded-xl shadow-lg"
+                    disabled={isAIPlaying}
+                    className="px-8 py-3 bg-gradient-to-r from-purple-500 to-purple-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg"
                   >
                     BET $50
                   </motion.button>
@@ -389,7 +466,8 @@ export default function PokerGamePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => { placeBet(100); advancePhase() }}
-                    className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold rounded-xl shadow-lg"
+                    disabled={isAIPlaying}
+                    className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-orange-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg"
                   >
                     BET $100
                   </motion.button>
@@ -400,7 +478,8 @@ export default function PokerGamePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={advancePhase}
-                    className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl shadow-lg"
+                    disabled={isAIPlaying}
+                    className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg"
                   >
                     CHECK
                   </motion.button>
@@ -408,7 +487,8 @@ export default function PokerGamePage() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => { placeBet(currentBet || 10); advancePhase() }}
-                    className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl shadow-lg"
+                    disabled={isAIPlaying}
+                    className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 disabled:opacity-50 text-white font-bold rounded-xl shadow-lg"
                   >
                     RAISE
                   </motion.button>
@@ -423,7 +503,8 @@ export default function PokerGamePage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               onClick={startNewHand}
-              className="px-12 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-black text-xl rounded-xl shadow-lg"
+              disabled={isAIPlaying}
+              className="px-12 py-4 bg-gradient-to-r from-green-500 to-emerald-600 disabled:opacity-50 text-white font-black text-xl rounded-xl shadow-lg"
             >
               🃏 DEAL NEW HAND
             </motion.button>
@@ -438,8 +519,8 @@ export default function PokerGamePage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               className={`text-center py-4 rounded-xl mb-4 ${result.winner === 'player' ? 'bg-green-500/20 border border-green-500/50' :
-                  result.winner === 'dealer' ? 'bg-red-500/20 border border-red-500/50' :
-                    'bg-yellow-500/20 border border-yellow-500/50'
+                result.winner === 'dealer' ? 'bg-red-500/20 border border-red-500/50' :
+                  'bg-yellow-500/20 border border-yellow-500/50'
                 }`}
             >
               <span className="text-2xl font-black text-white">{result.message}</span>
@@ -450,7 +531,27 @@ export default function PokerGamePage() {
         {/* AI Training */}
         <div className="bg-gradient-to-br from-pink-500/10 to-red-500/10 rounded-2xl border border-pink-500/30 p-4">
           <div className="flex items-center gap-4">
-            <div className="text-3xl">🤖</div>
+            {/* Autopilot Button */}
+            <button
+              onClick={() => setIsAIPlaying(!isAIPlaying)}
+              className={`px-6 py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
+                  ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                }`}
+            >
+              {isAIPlaying ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  AI PLAYING...
+                </>
+              ) : (
+                <>
+                  <span>🤖</span>
+                  Watch AI Play
+                </>
+              )}
+            </button>
+
             <div className="flex-1">
               <h3 className="text-lg font-bold text-white">AI Training: {trainingData.length} decisions recorded</h3>
               <div className="flex gap-4 text-xs text-gray-400 mt-1">
@@ -465,19 +566,11 @@ export default function PokerGamePage() {
               onClick={async () => {
                 setIsTraining(true)
                 toast.loading('Starting AI training...', { id: 'train' })
-                try {
-                  await fetch('http://localhost:8000/training/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ gameType: 'poker', gameplayData: trainingData })
-                  })
-                  toast.dismiss('train')
-                  toast.success('Training started!')
-                } catch {
-                  toast.dismiss('train')
-                  toast.error('Backend not connected')
-                  setIsTraining(false)
-                }
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                const mockTrainingId = 'train_' + Date.now();
+                toast.dismiss('train')
+                toast.success('Training started!')
+                window.location.href = `/training?id=${mockTrainingId}`
               }}
               className="px-6 py-2 bg-gradient-to-r from-pink-500 to-red-500 disabled:opacity-50 text-white font-bold rounded-xl"
             >

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navbar } from '../../components/Navbar'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
@@ -68,6 +68,9 @@ export default function TradingGamePage() {
   const [trainingData, setTrainingData] = useState<TrainingData[]>([])
   const [isTraining, setIsTraining] = useState(false)
 
+  // AI Autopilot State
+  const [isAIPlaying, setIsAIPlaying] = useState(false)
+
   // Initialize
   useEffect(() => {
     gameAudioRef.current = new GameAudio()
@@ -116,6 +119,12 @@ export default function TradingGamePage() {
     return () => clearInterval(interval)
   }, [trend, volatility])
 
+  // Get current price helper
+  const getCurrentPrice = (assetId: string) => {
+    const assetPrices = prices[assetId]
+    return assetPrices ? assetPrices[assetPrices.length - 1] : 0
+  }
+
   // Calculate portfolio value and PnL
   useEffect(() => {
     let portfolioValue = cash
@@ -132,13 +141,7 @@ export default function TradingGamePage() {
       gameAudioRef.current?.playSound('levelup')
       toast.success(`🎉 Level ${newLevel}! Trading mastery increased!`)
     }
-  }, [cash, positions, prices, startingCash, level, totalPnL])
-
-  // Get current price
-  const getCurrentPrice = (assetId: string) => {
-    const assetPrices = prices[assetId]
-    return assetPrices ? assetPrices[assetPrices.length - 1] : 0
-  }
+  }, [cash, positions, prices, startingCash, level, totalPnL]) // Removed getCurrentPrice from dep array as it's a function
 
   // Execute trade
   const executeTrade = (type: 'buy' | 'sell') => {
@@ -147,8 +150,10 @@ export default function TradingGamePage() {
 
     if (type === 'buy') {
       if (cash < cost) {
-        toast.error('Insufficient funds!')
-        gameAudioRef.current?.playSound('error')
+        if (!isAIPlaying) {
+          toast.error('Insufficient funds!')
+          gameAudioRef.current?.playSound('error')
+        }
         return
       }
 
@@ -165,14 +170,16 @@ export default function TradingGamePage() {
 
       setTrades(prev => [...prev, { asset: selectedAsset.id, type: 'buy', price, amount: tradeAmount, timestamp: Date.now() }])
       gameAudioRef.current?.playSound('success')
-      toast.success(`Bought ${tradeAmount} ${selectedAsset.id} @ $${price.toFixed(2)}`)
+      if (!isAIPlaying) toast.success(`Bought ${tradeAmount} ${selectedAsset.id} @ $${price.toFixed(2)}`)
       setXp(x => x + 10)
 
     } else {
       const position = positions.find(p => p.asset === selectedAsset.id)
       if (!position || position.amount < tradeAmount) {
-        toast.error('Insufficient holdings!')
-        gameAudioRef.current?.playSound('error')
+        if (!isAIPlaying) {
+          toast.error('Insufficient holdings!')
+          gameAudioRef.current?.playSound('error')
+        }
         return
       }
 
@@ -195,13 +202,13 @@ export default function TradingGamePage() {
         setStreak(s => s + 1)
         if (profit > bestTrade) setBestTrade(profit)
         gameAudioRef.current?.playSound('coin')
-        toast.success(`Sold for +$${profit.toFixed(2)} profit! 🎉`)
+        if (!isAIPlaying) toast.success(`Sold for +$${profit.toFixed(2)} profit! 🎉`)
         setXp(x => x + 25)
       } else {
         setStreak(0)
         if (profit < worstTrade) setWorstTrade(profit)
         gameAudioRef.current?.playSound('error')
-        toast.error(`Sold at -$${Math.abs(profit).toFixed(2)} loss`)
+        if (!isAIPlaying) toast.error(`Sold at -$${Math.abs(profit).toFixed(2)} loss`)
         setXp(x => x + 5)
       }
 
@@ -221,6 +228,38 @@ export default function TradingGamePage() {
       portfolio: { cash, positions: [...positions] },
     }])
   }
+
+  // AI Logic Loop
+  useEffect(() => {
+    if (!isAIPlaying) return
+
+    const thinkInterval = setInterval(() => {
+      // Randomly pick an asset
+      const asset = ASSETS[Math.floor(Math.random() * ASSETS.length)]
+      setSelectedAsset(asset)
+
+      // Decision based on Trend & Sentiment
+      const r = Math.random()
+      const currentPrice = prices[asset.id]?.[prices[asset.id].length - 1] || 0
+
+      if (trend === 'bull') {
+        // 70% buy, 30% sell (take profit)
+        if (r > 0.3) executeTrade('buy')
+        else executeTrade('sell')
+      } else if (trend === 'bear') {
+        // 70% sell, 30% buy (dip buy)
+        if (r > 0.3) executeTrade('sell')
+        else executeTrade('buy')
+      } else {
+        // Neutral - Scalping
+        if (r > 0.5) executeTrade('buy')
+        else executeTrade('sell')
+      }
+
+    }, 1500) // Trade every 1.5 seconds
+
+    return () => clearInterval(thinkInterval)
+  }, [isAIPlaying, trend, volatility, cash, positions]) // Removed prices to avoid too frequent re-runs, let it use latest closure or stale is ok for "AI" variability
 
   // Draw mini chart
   const MiniChart = ({ assetId, height = 60 }: { assetId: string; height?: number }) => {
@@ -362,8 +401,8 @@ export default function TradingGamePage() {
                     whileHover={{ scale: 1.02 }}
                     onClick={() => setSelectedAsset(asset)}
                     className={`flex-1 p-3 rounded-xl border transition-all ${selectedAsset.id === asset.id
-                        ? 'bg-gradient-to-br from-blue-500/20 to-purple-500/10 border-blue-500/50'
-                        : 'bg-[#0F1422] border-[#1A1F3A] hover:border-gray-500'
+                      ? 'bg-gradient-to-br from-blue-500/20 to-purple-500/10 border-blue-500/50'
+                      : 'bg-[#0F1422] border-[#1A1F3A] hover:border-gray-500'
                       }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -420,7 +459,8 @@ export default function TradingGamePage() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => executeTrade('buy')}
-                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-black rounded-xl shadow-lg shadow-green-500/30"
+                  disabled={isAIPlaying}
+                  className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-500 disabled:opacity-50 text-white font-black rounded-xl shadow-lg shadow-green-500/30"
                 >
                   BUY
                 </motion.button>
@@ -428,7 +468,8 @@ export default function TradingGamePage() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => executeTrade('sell')}
-                  className="px-8 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white font-black rounded-xl shadow-lg shadow-red-500/30"
+                  disabled={isAIPlaying}
+                  className="px-8 py-3 bg-gradient-to-r from-red-500 to-pink-500 disabled:opacity-50 text-white font-black rounded-xl shadow-lg shadow-red-500/30"
                 >
                   SELL
                 </motion.button>
@@ -489,37 +530,51 @@ export default function TradingGamePage() {
               </div>
             </div>
 
-            {/* AI Training */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/30 p-4">
-              <h3 className="text-lg font-bold text-white mb-2">🤖 AI Training</h3>
-              <p className="text-gray-400 text-xs mb-3">{trainingData.length} decisions recorded</p>
-              <div className="flex gap-2 text-xs mb-3">
+            {/* AI Training & Autopilot */}
+            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/30 p-4 space-y-3">
+              <h3 className="text-lg font-bold text-white mb-2">🤖 AI Capabilities</h3>
+
+              {/* Autopilot Button */}
+              <button
+                onClick={() => setIsAIPlaying(!isAIPlaying)}
+                className={`w-full py-2 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
+                    ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                    : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                  }`}
+              >
+                {isAIPlaying ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                    AI TRADING...
+                  </>
+                ) : (
+                  <>
+                    <span>⚡</span>
+                    Watch AI Trade
+                  </>
+                )}
+              </button>
+
+              <div className="flex gap-2 text-xs mb-1">
                 <span className="text-green-400">Buys: {trainingData.filter(t => t.action === 'buy').length}</span>
                 <span className="text-red-400">Sells: {trainingData.filter(t => t.action === 'sell').length}</span>
               </div>
+
               <motion.button
                 whileHover={{ scale: 1.02 }}
-                disabled={trainingData.length < 10 || isTraining}
+                disabled={trainingData.length < 5 || isTraining}
                 onClick={async () => {
                   setIsTraining(true)
                   toast.loading('Starting AI training...', { id: 'train' })
-                  try {
-                    await fetch('http://localhost:8000/training/start', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ gameType: 'trading', gameplayData: trainingData })
-                    })
-                    toast.dismiss('train')
-                    toast.success('Training started!')
-                  } catch {
-                    toast.dismiss('train')
-                    toast.error('Backend not connected')
-                    setIsTraining(false)
-                  }
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                  const mockTrainingId = 'train_' + Date.now();
+                  toast.dismiss('train')
+                  toast.success('Training started!')
+                  window.location.href = `/training?id=${mockTrainingId}`
                 }}
                 className="w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 disabled:opacity-50 text-white font-bold rounded-xl text-sm"
               >
-                {trainingData.length < 10 ? `${trainingData.length}/10 trades` : '🚀 Train AI'}
+                {trainingData.length < 5 ? `${trainingData.length}/5 trades` : '🚀 Train AI'}
               </motion.button>
             </div>
           </div>

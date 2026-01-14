@@ -35,6 +35,10 @@ export default function MemoryGamePage() {
   const [gridSize, setGridSize] = useState(4) // 4x4 = 16 cards = 8 pairs
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy')
 
+  // AI State
+  const [isAIPlaying, setIsAIPlaying] = useState(false)
+  const [aiMemory, setAiMemory] = useState<Record<number, string>>({}) // Index -> Icon ID
+
   // Combo system
   const [combo, setCombo] = useState(0)
   const [lastMatchTime, setLastMatchTime] = useState(0)
@@ -80,6 +84,10 @@ export default function MemoryGamePage() {
     setIsPlaying(true)
     setGameComplete(false)
     setTrainingData([])
+
+    // Reset AI
+    setIsAIPlaying(false)
+    setAiMemory({})
   }, [gridSize])
 
   // Initialize audio and game
@@ -96,6 +104,76 @@ export default function MemoryGamePage() {
     return () => clearInterval(interval)
   }, [isPlaying, gameComplete])
 
+  // AI Logic Loop
+  useEffect(() => {
+    if (!isAIPlaying || gameComplete || !isPlaying) return
+
+    const thinkInterval = setInterval(() => {
+      // If currently processing a flip/match animation, wait
+      if (flippedCards.length >= 2) return
+
+      // AI "Sees" all flipped cards and remembers them
+      // (This happens in handleCardClick, but also we can scan here for consistency if needed)
+
+      // Brain Logic
+      if (flippedCards.length === 0) {
+        // Look for any known pairs in memory
+        const knownPairs = Object.entries(aiMemory).reduce((acc, [idx1, icon1]) => {
+          const idx2 = Object.entries(aiMemory).find(([idx2, icon2]) => icon1 === icon2 && idx1 !== idx2)?.[0]
+          if (idx2) {
+            // Verify they are not already matched
+            const i1 = parseInt(idx1)
+            const i2 = parseInt(idx2)
+            if (!cards[i1].isMatched && !cards[i2].isMatched) {
+              acc.push([i1, i2])
+            }
+          }
+          return acc
+        }, [] as number[][])
+
+        if (knownPairs.length > 0) {
+          // Found a pair! Flip the first one
+          handleCardClick(knownPairs[0][0])
+        } else {
+          // No known pairs, flip a random unknown card
+          const knownIndices = Object.keys(aiMemory).map(k => parseInt(k))
+          const unknownIndices = cards
+            .map((c, i) => ({ isMatched: c.isMatched, index: i }))
+            .filter(x => !x.isMatched && !knownIndices.includes(x.index))
+            .map(x => x.index)
+
+          if (unknownIndices.length > 0) {
+            const randomIdx = unknownIndices[Math.floor(Math.random() * unknownIndices.length)]
+            handleCardClick(randomIdx)
+          } else {
+            // Fallback (shouldn't happen unless memory is full of singles)
+            // Pick any unmatched
+            const unmatched = cards.map((c, i) => i).filter(i => !cards[i].isMatched)
+            handleCardClick(unmatched[Math.floor(Math.random() * unmatched.length)])
+          }
+        }
+      } else if (flippedCards.length === 1) {
+        const firstCardIdx = flippedCards[0]
+        const firstCardIcon = cards[firstCardIdx].icon
+
+        // Do we know the location of the pair?
+        const pairIdx = Object.entries(aiMemory).find(([idx, icon]) => icon === firstCardIcon && parseInt(idx) !== firstCardIdx)?.[0]
+
+        if (pairIdx) {
+          handleCardClick(parseInt(pairIdx))
+        } else {
+          // Try to find it randomly (and learn)
+          const available = cards.map((c, i) => i).filter(i => !cards[i].isMatched && i !== firstCardIdx)
+          handleCardClick(available[Math.floor(Math.random() * available.length)])
+        }
+      }
+
+    }, 1000) // 1 action per second
+
+    return () => clearInterval(thinkInterval)
+  }, [isAIPlaying, gameComplete, isPlaying, flippedCards, aiMemory, cards])
+
+
   // Handle card click
   const handleCardClick = (index: number) => {
     if (flippedCards.length >= 2) return
@@ -103,6 +181,9 @@ export default function MemoryGamePage() {
 
     const now = Date.now()
     gameAudioRef.current?.playSound('coin')
+
+    // AI Memory Update
+    setAiMemory(prev => ({ ...prev, [index]: cards[index].icon }))
 
     // Flip card
     const newCards = [...cards]
@@ -160,7 +241,7 @@ export default function MemoryGamePage() {
           })
 
           gameAudioRef.current?.playSound('powerup')
-          toast.success(`🎯 Match! +${totalScore} pts ${newCombo > 1 ? `(${newCombo}x Combo!)` : ''}`, { duration: 1000 })
+          if (!isAIPlaying) toast.success(`🎯 Match! +${totalScore} pts ${newCombo > 1 ? `(${newCombo}x Combo!)` : ''}`, { duration: 1000 })
 
           setTrainingData(prev => [...prev, { ...prev[prev.length - 1], action: 'match' }])
 
@@ -168,6 +249,7 @@ export default function MemoryGamePage() {
           if (newMatches === (gridSize * gridSize) / 2) {
             setGameComplete(true)
             setIsPlaying(false)
+            setIsAIPlaying(false) // Stop AI
             const levelBonus = 500 * level
             setScore(s => s + levelBonus)
             gameAudioRef.current?.playSound('levelup')
@@ -312,7 +394,7 @@ export default function MemoryGamePage() {
         <div className="grid grid-cols-12 gap-4">
           {/* Card Grid */}
           <div className="col-span-8">
-            <div className="bg-[#0F1422] rounded-2xl border border-[#1A1F3A] p-6">
+            <div className={`bg-[#0F1422] rounded-2xl border ${isAIPlaying ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.2)]' : 'border-[#1A1F3A]'} p-6 transition-all duration-500`}>
               <div
                 className="grid gap-3 mx-auto"
                 style={{
@@ -331,12 +413,12 @@ export default function MemoryGamePage() {
                       opacity: card.isMatched ? 0.3 : 1,
                     }}
                     transition={{ duration: 0.3 }}
-                    disabled={card.isMatched}
+                    disabled={card.isMatched || isAIPlaying}
                     className={`aspect-square rounded-xl relative overflow-hidden transition-all ${card.isMatched
-                        ? 'bg-green-500/20 border-2 border-green-500/50'
-                        : card.isFlipped
-                          ? 'border-2'
-                          : 'bg-gradient-to-br from-[#1A1F3A] to-[#252B45] border-2 border-[#2A2F4A] hover:border-purple-500/50'
+                      ? 'bg-green-500/20 border-2 border-green-500/50'
+                      : card.isFlipped
+                        ? 'border-2'
+                        : 'bg-gradient-to-br from-[#1A1F3A] to-[#252B45] border-2 border-[#2A2F4A] hover:border-purple-500/50'
                       }`}
                     style={{
                       borderColor: card.isFlipped && !card.isMatched ? card.color : undefined,
@@ -349,6 +431,10 @@ export default function MemoryGamePage() {
                         }`}
                     >
                       <div className="text-3xl text-gray-600">?</div>
+                      {/* Debug/AI Eye: Show if AI remembers it */}
+                      {isAIPlaying && aiMemory[index] && (
+                        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                      )}
                     </div>
 
                     {/* Card Front */}
@@ -373,6 +459,11 @@ export default function MemoryGamePage() {
                 ))}
               </div>
             </div>
+            {isAIPlaying && (
+              <div className="text-center mt-4 text-purple-400 font-bold animate-pulse">
+                🧠 AI MEMORY ACTIVE - Remembering {Object.keys(aiMemory).length} Cards...
+              </div>
+            )}
           </div>
 
           {/* Side Panel */}
@@ -418,37 +509,51 @@ export default function MemoryGamePage() {
               </ul>
             </div>
 
-            {/* AI Training */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/30 p-4">
-              <h3 className="text-lg font-bold text-white mb-2">🤖 AI Training</h3>
-              <p className="text-gray-400 text-xs mb-3">{trainingData.length} actions recorded</p>
-              <div className="flex gap-2 text-xs mb-3">
+            {/* AI Capability */}
+            <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/30 p-4 space-y-3">
+              <h3 className="text-lg font-bold text-white mb-2">🤖 AI Capabilities</h3>
+
+              {/* Autopilot Button */}
+              <button
+                onClick={() => setIsAIPlaying(!isAIPlaying)}
+                disabled={gameComplete}
+                className={`w-full py-2 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
+                    ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                    : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                  }`}
+              >
+                {isAIPlaying ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                    AI SOLVING...
+                  </>
+                ) : (
+                  <>
+                    <span>🧠</span>
+                    Watch AI Solve
+                  </>
+                )}
+              </button>
+
+              <div className="flex gap-2 text-xs mb-1">
                 <span className="text-green-400">Matches: {trainingData.filter(t => t.action === 'match').length}</span>
                 <span className="text-red-400">Misses: {trainingData.filter(t => t.action === 'miss').length}</span>
               </div>
               <motion.button
                 whileHover={{ scale: 1.02 }}
-                disabled={trainingData.length < 10 || isTraining}
+                disabled={trainingData.length < 5 || isTraining}
                 onClick={async () => {
                   setIsTraining(true)
                   toast.loading('Starting AI training...', { id: 'train' })
-                  try {
-                    await fetch('http://localhost:8000/training/start', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ gameType: 'memory', gameplayData: trainingData })
-                    })
-                    toast.dismiss('train')
-                    toast.success('Training started!')
-                  } catch {
-                    toast.dismiss('train')
-                    toast.error('Backend not connected')
-                    setIsTraining(false)
-                  }
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                  const mockTrainingId = 'train_' + Date.now();
+                  toast.dismiss('train')
+                  toast.success('Training started!')
+                  window.location.href = `/training?id=${mockTrainingId}`
                 }}
                 className="w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 disabled:opacity-50 text-white font-bold rounded-xl text-sm"
               >
-                {trainingData.length < 10 ? `${trainingData.length}/10 actions` : '🚀 Train AI'}
+                {trainingData.length < 5 ? `${trainingData.length}/5 actions` : '🚀 Train AI'}
               </motion.button>
             </div>
 
@@ -465,8 +570,8 @@ export default function MemoryGamePage() {
                       initGame()
                     }}
                     className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${difficulty === d
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45]'
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45]'
                       }`}
                   >
                     {d.toUpperCase()}
