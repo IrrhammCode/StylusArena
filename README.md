@@ -147,27 +147,27 @@ Our engine analyzes gameplay behavior to derive **actual, deployable DeFi config
 
 ```mermaid
 graph TB
-    subgraph Frontend["🖥️ Frontend (Next.js 14)"]
+    subgraph Frontend["Frontend - Next.js 14"]
         UI[React Components]
         Games[Phaser.js Games]
-        Wallet[Wagmi + RainbowKit]
+        Wallet[Wagmi RainbowKit]
     end
 
-    subgraph Training["🧠 Training Pipeline"]
+    subgraph Training["Training Pipeline"]
         Watcher[Gameplay Recorder]
         AI[Policy Learner]
         Config[Strategy Generator]
     end
 
-    subgraph Blockchain["⛓️ Arbitrum (Stylus)"]
+    subgraph Blockchain["Arbitrum Stylus"]
         Registry[Agent Registry]
         Marketplace[Marketplace Contract]
         Profiles[User Profiles]
     end
 
-    subgraph Storage["💾 Data Layer"]
+    subgraph Storage["Data Layer"]
         LocalStorage[Browser LocalStorage]
-        IPFS[IPFS (Future)]
+        IPFS["IPFS - Future"]
     end
 
     UI --> Games
