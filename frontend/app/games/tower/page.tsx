@@ -333,18 +333,56 @@ export default function TowerGamePage() {
   }, [isMusicPlaying, musicVolume, isPlaying])
 
   const handleStartTraining = async () => {
-    // ... same as before
     if (gameplayData.length === 0) {
       toast.error('Play the game first to collect training data!')
       return
     }
     setIsTraining(true)
-    toast.loading('Starting AI training...', { id: 'training' })
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const mockTrainingId = 'train_' + Date.now();
+    toast.loading('Analyzing liquidity strategy...', { id: 'training' })
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // --- Real World Liquidity Strategy Derivation ---
+
+    // 1. Calculate Metrics
+    const buildActions = gameplayData.filter(d => d.action === 'build').length
+    const upgradeActions = gameplayData.filter(d => d.action === 'upgrade').length
+    const totalActions = buildActions + upgradeActions || 1
+
+    const avgResources = gameplayData.reduce((sum, d) => sum + d.gameState.resources, 0) / gameplayData.length
+
+    // 2. Identify Strategy
+    // More upgrades = Concentrated (Depth). More builds = Wide (Breadth).
+    const concentrationScore = (upgradeActions / totalActions)
+    const liquidityShape = concentrationScore > 0.6 ? "Concentrated (Uniswap V3)" : "Wide Range (Full Range)"
+
+    // Low floating resources = Active management. High float = Passive.
+    const resourceEfficiency = Math.max(0, 1000 - avgResources)
+    const managementStyle = resourceEfficiency > 500 ? "Active Rebalancer" : "Passive LP"
+
+    // 3. Generate Config
+    const realWorldConfig = {
+      agentName: "LiquidityBot Gen 1",
+      description: `Generated from ${gameplayData.length} strategic decisions`,
+      parameters: {
+        liquidityShape: liquidityShape,
+        managementStyle: managementStyle,
+        rebalanceThreshold: managementStyle === "Active Rebalancer" ? "5% Deviation" : "20% Deviation",
+        targetPools: ["ETH/USDC", "ARB/ETH"],
+        feeTier: concentrationScore > 0.6 ? "0.05%" : "0.3%"
+      },
+      timestamp: Date.now()
+    }
+
+    // 4. Save to LocalStorage
+    localStorage.setItem('stylus_liquidity_strategy', JSON.stringify(realWorldConfig))
+
     toast.dismiss('training')
-    toast.success('Training started!')
-    window.location.href = `/training?id=${mockTrainingId}`
+    const mockTrainingId = 'train_' + Date.now();
+    toast.success(`Strategy Generated: ${managementStyle}`)
+
+    setTimeout(() => {
+      window.location.href = `/training?id=${mockTrainingId}&type=tower`
+    }, 1000)
   }
 
   return (
@@ -400,19 +438,19 @@ export default function TowerGamePage() {
             <button
               onClick={() => setIsAIPlaying(!isAIPlaying)}
               className={`px-6 py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                  ? 'bg-amber-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.5)] animate-pulse'
-                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                ? 'bg-amber-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.5)] animate-pulse'
+                : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
                 }`}
             >
               {isAIPlaying ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  AI DEFENDING...
+                  AI AUTO-PILOT ON
                 </>
               ) : (
                 <>
-                  <span>🛡️</span>
-                  Watch AI Defend
+                  <span>🤖</span>
+                  ENABLE AI AUTO-PILOT
                 </>
               )}
             </button>
@@ -464,7 +502,67 @@ export default function TowerGamePage() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={handleStartTraining}
+              onClick={async () => {
+                if (gameplayData.length === 0) {
+                  toast.error('Play the game first to collect training data!')
+                  return
+                }
+                setIsTraining(true)
+                toast.loading('Analyzing liquidity strategy...', { id: 'train' })
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // --- Real World Liquidity Strategy Derivation ---
+
+                // 1. Calculate Metrics
+                const buildActions = gameplayData.filter(d => d.action === 'build').length
+                const upgradeActions = gameplayData.filter(d => d.action === 'upgrade').length
+                const totalActions = buildActions + upgradeActions || 1
+
+                const avgResources = gameplayData.reduce((sum, d) => sum + d.gameState.resources, 0) / gameplayData.length
+
+                // 2. Identify Strategy
+                // More upgrades = Concentrated (Depth). More builds = Wide (Breadth).
+                const concentrationScore = (upgradeActions / totalActions)
+                const liquidityShape = concentrationScore > 0.6 ? "Concentrated (Uniswap V3)" : "Wide Range (Full Range)"
+
+                // Low floating resources = Active management. High float = Passive.
+                const resourceEfficiency = Math.max(0, 1000 - avgResources)
+                const managementStyle = resourceEfficiency > 500 ? "Active Rebalancer" : "Passive LP"
+
+                // 3. Generate Config
+                const realWorldConfig = {
+                  agentName: "LiquidityBot Gen 1",
+                  description: `Generated from ${gameplayData.length} strategic decisions`,
+                  parameters: {
+                    liquidityShape: liquidityShape,
+                    managementStyle: managementStyle,
+                    rebalanceThreshold: managementStyle === "Active Rebalancer" ? "5% Deviation" : "20% Deviation",
+                    targetPools: ["ETH/USDC", "ARB/ETH"],
+                    feeTier: concentrationScore > 0.6 ? "0.05%" : "0.3%"
+                  },
+                  timestamp: Date.now()
+                }
+
+                // 4. Save to LocalStorage
+                const newTrainingId = 'train_' + Date.now();
+                localStorage.setItem('stylus_liquidity_strategy', JSON.stringify({
+                  id: newTrainingId,
+                  timestamp: Date.now(),
+                  parameters: {
+                    liquidityShape: liquidityShape, // Use the derived liquidityShape
+                    managementStyle: managementStyle, // Use the derived managementStyle
+                    rebalanceThreshold: realWorldConfig.parameters.rebalanceThreshold, // Use derived rebalanceThreshold
+                    feeTier: realWorldConfig.parameters.feeTier // Use derived feeTier
+                  }
+                }))
+
+                toast.dismiss('train')
+                toast.success(`Strategy Generated: ${managementStyle}`)
+
+                setTimeout(() => {
+                  window.location.href = `/training?id=${newTrainingId}&type=tower`
+                }, 1000)
+              }}
               disabled={gameplayData.length === 0 || isTraining}
               className="px-6 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all flex items-center gap-2"
             >

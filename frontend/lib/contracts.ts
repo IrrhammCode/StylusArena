@@ -435,9 +435,9 @@ export const stylusArenaABI = [
 
 // Contract address - will be set from .env.local after deployment
 // Format: NEXT_PUBLIC_CONTRACT_ADDRESS=0x...
-export const STYLUS_ARENA_ADDRESS: Address = 
+export const STYLUS_ARENA_ADDRESS: Address =
   (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as Address) ||
-  '0x0000000000000000000000000000000000000000'
+  '0x83e20eC2522DBDC908479e39bf0997131849D638'
 
 // Helper functions
 export const contractConfig = {

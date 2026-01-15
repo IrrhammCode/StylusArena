@@ -538,19 +538,19 @@ export default function TradingGamePage() {
               <button
                 onClick={() => setIsAIPlaying(!isAIPlaying)}
                 className={`w-full py-2 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                    ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
-                    : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                  ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
                   }`}
               >
                 {isAIPlaying ? (
                   <>
                     <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                    AI TRADING...
+                    AI TRADING (RECORDING...)
                   </>
                 ) : (
                   <>
-                    <span>⚡</span>
-                    Watch AI Trade
+                    <span>🤖</span>
+                    ENABLE AI AUTO-PILOT
                   </>
                 )}
               </button>
@@ -565,16 +565,64 @@ export default function TradingGamePage() {
                 disabled={trainingData.length < 5 || isTraining}
                 onClick={async () => {
                   setIsTraining(true)
-                  toast.loading('Starting AI training...', { id: 'train' })
-                  await new Promise(resolve => setTimeout(resolve, 1500));
-                  const mockTrainingId = 'train_' + Date.now();
+                  toast.loading('Analyzing trading style...', { id: 'train' })
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+
+                  // --- Real World Strategy Derivation ---
+                  // 1. Calculate Metrics
+                  const avgTradeSize = trainingData.reduce((sum, t) => sum + (t.price * (t.portfolio.positions.find(p => p.asset === t.asset)?.amount || 1)), 0) / trainingData.length
+                  const riskScore = Math.min(10, Math.ceil((avgTradeSize / cash) * 100)) // 1-10 based on % of portfolio
+
+                  // 2. Identify Strategy Type
+                  let momentumScore = 0
+                  let reversionScore = 0
+
+                  trainingData.forEach(t => {
+                    if (t.action === 'buy' && t.indicators.trend === 'bull') momentumScore++
+                    if (t.action === 'sell' && t.indicators.trend === 'bear') momentumScore++
+
+                    if (t.action === 'buy' && t.indicators.trend === 'bear') reversionScore++
+                    if (t.action === 'sell' && t.indicators.trend === 'bull') reversionScore++
+                  })
+
+                  const strategyType = momentumScore > reversionScore ? 'Momentum Trend Follower' : 'Mean Reversion Scalper'
+
+                  // 3. Generate Config
+                  const realWorldConfig = {
+                    agentName: "AlphaHunter Gen 1",
+                    description: `Generated from ${trainingData.length} trades`,
+                    parameters: {
+                      riskTolerance: riskScore > 7 ? "High" : riskScore > 3 ? "Medium" : "Low",
+                      strategy: strategyType,
+                      rebalanceFrequency: trainingData.length > 20 ? "High (HFT)" : "Medium (Swing)",
+                      assets: Array.from(new Set(trainingData.map(t => t.asset))),
+                      stopLoss: riskScore > 7 ? "5%" : "2%",
+                      takeProfit: riskScore > 7 ? "15%" : "5%"
+                    },
+                    timestamp: Date.now()
+                  }
+
+                  // 4. Save to LocalStorage for "Real World" deployment
+                  localStorage.setItem('stylus_trading_strategy', JSON.stringify(realWorldConfig))
+
                   toast.dismiss('train')
-                  toast.success('Training started!')
-                  window.location.href = `/training?id=${mockTrainingId}`
+                  const newTrainingId = 'train_' + Date.now();
+                  // Save initial strategy config
+                  localStorage.setItem('stylus_trading_strategy', JSON.stringify({
+                    id: newTrainingId,
+                    timestamp: Date.now(),
+                    parameters: realWorldConfig.parameters // Use parameters from the generated realWorldConfig
+                  }))
+
+                  toast.success(`Strategy Generated: ${strategyType}`)
+
+                  setTimeout(() => {
+                    window.location.href = `/training?id=${newTrainingId}&type=trading`
+                  }, 1000)
                 }}
                 className="w-full py-2 bg-gradient-to-r from-purple-500 to-pink-500 disabled:opacity-50 text-white font-bold rounded-xl text-sm"
               >
-                {trainingData.length < 5 ? `${trainingData.length}/5 trades` : '🚀 Train AI'}
+                {trainingData.length < 5 ? `${trainingData.length}/5 trades` : '🚀 Train AI Agent'}
               </motion.button>
             </div>
           </div>

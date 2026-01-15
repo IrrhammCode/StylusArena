@@ -15,7 +15,7 @@ import {
   walletConnectWallet,
 } from '@rainbow-me/rainbowkit/wallets'
 import { configureChains, createConfig, WagmiConfig } from 'wagmi'
-import { arbitrum, arbitrumSepolia } from 'wagmi/chains'
+import { arbitrumSepolia } from 'wagmi/chains'
 import { publicProvider } from 'wagmi/providers/public'
 
 // Create query client
@@ -30,7 +30,7 @@ const queryClient = new QueryClient({
 
 // Configure chains
 const { chains, publicClient } = configureChains(
-  [arbitrumSepolia, arbitrum],
+  [arbitrumSepolia],
   [publicProvider()]
 )
 
@@ -72,11 +72,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // Prevent hydration mismatch
   if (!mounted) {
     return (
-      <QueryClientProvider client={queryClient}>
-        <WalletContext.Provider value={{ isAvailable: false, isReady: false }}>
-          {children}
-        </WalletContext.Provider>
-      </QueryClientProvider>
+      <WagmiConfig config={wagmiConfig}>
+        <QueryClientProvider client={queryClient}>
+          <WalletContext.Provider value={{ isAvailable: false, isReady: false }}>
+            {children}
+          </WalletContext.Provider>
+        </QueryClientProvider>
+      </WagmiConfig>
     )
   }
 

@@ -45,6 +45,7 @@ export default function PokerGamePage() {
 
   // AI State
   const [isAIPlaying, setIsAIPlaying] = useState(false)
+  const [isModeSelected, setIsModeSelected] = useState(false)
 
   // Training data
   interface TrainingData {
@@ -317,6 +318,72 @@ export default function PokerGamePage() {
 
   return (
     <div className="min-h-screen bg-[#0A0E27]">
+      <AnimatePresence>
+        {!isModeSelected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E27]/95 backdrop-blur-sm p-4"
+          >
+            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Manual Mode Card */}
+              <motion.button
+                whileHover={{ scale: 1.02, borderColor: '#00D9FF' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsModeSelected(true)}
+                className="group relative h-[400px] rounded-2xl border-2 border-[#1A1F3A] bg-[#0F1422] p-8 text-left transition-all overflow-hidden flex flex-col justify-between hover:shadow-[0_0_30px_rgba(0,217,255,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-xl bg-blue-500/10 flex items-center justify-center mb-6">
+                    <span className="text-3xl">🃏</span>
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-2">Manual Play</h3>
+                  <p className="text-gray-400 leading-relaxed">
+                    Test your poker face. Calculate pot odds, bluff the dealer, and manage your chip stack manually.
+                  </p>
+                </div>
+                <div className="relative z-10 flex items-center text-blue-400 font-bold group-hover:translate-x-2 transition-transform">
+                  DEAL CARDS <span className="ml-2">→</span>
+                </div>
+              </motion.button>
+
+              {/* Data/AI Mode Card */}
+              <motion.button
+                whileHover={{ scale: 1.02, borderColor: '#9333EA' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setIsModeSelected(true)
+                  setIsAIPlaying(true)
+                }}
+                className="group relative h-[400px] rounded-2xl border-2 border-[#1A1F3A] bg-[#0F1422] p-8 text-left transition-all overflow-hidden flex flex-col justify-between hover:shadow-[0_0_30px_rgba(147,51,234,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6">
+                    <span className="text-3xl">🤖</span>
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-2">Play by Data</h3>
+                  <p className="text-gray-400 leading-relaxed">
+                    Watch the AI Agent play via probability simulation. (Data Upload coming soon).
+                  </p>
+                </div>
+                <div className="relative z-10 flex items-center text-purple-400 font-bold group-hover:translate-x-2 transition-transform">
+                  ACTIVATE AUTO-PILOT <span className="ml-2">→</span>
+                </div>
+
+                {/* Badge */}
+                <div className="absolute top-6 right-6 px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/30 text-xs text-purple-300 font-mono">
+                  SIMULATION
+                </div>
+              </motion.button>
+
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <Navbar />
 
       <main className="max-w-6xl mx-auto px-6 py-4">
@@ -535,19 +602,19 @@ export default function PokerGamePage() {
             <button
               onClick={() => setIsAIPlaying(!isAIPlaying)}
               className={`px-6 py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                  ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
-                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
                 }`}
             >
               {isAIPlaying ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  AI PLAYING...
+                  AI AUTO-PILOT ON
                 </>
               ) : (
                 <>
                   <span>🤖</span>
-                  Watch AI Play
+                  ENABLE AI AUTO-PILOT
                 </>
               )}
             </button>

@@ -34,14 +34,42 @@ function TestContent() {
 
   const fetchAgentData = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:8000/training/${id}/model`)
-      if (!response.ok) throw new Error('Failed to fetch agent data')
-      const data = await response.json()
-      setAgentData(data)
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      const models = JSON.parse(localStorage.getItem('stylus_trained_models') || '[]')
+      const model = models.find((m: any) => m.id === id)
+
+      if (model) {
+        setAgentData({
+          id: model.id,
+          gameType: model.gameType,
+          model: {
+            performance: {
+              accuracy: model.accuracy,
+              epochs: 20,
+              dataPoints: 150
+            }
+          }
+        })
+      } else {
+        // Fallback for demo if id not found (mock it)
+        setAgentData({
+          id: id,
+          gameType: id.startsWith('race') ? 'racing' : 'strategy',
+          model: {
+            performance: {
+              accuracy: 0.88,
+              epochs: 20,
+              dataPoints: 150
+            }
+          }
+        })
+      }
       setIsLoading(false)
     } catch (error: any) {
       console.error('Failed to fetch agent data:', error)
-      toast.error(error.message || 'Failed to load agent data')
+      toast.error('Failed to load local agent data')
       setIsLoading(false)
     }
   }
@@ -80,7 +108,7 @@ function TestContent() {
 
     // Trigger notification if score is good
     if (avgScore >= 80 && (window as any).addNotification) {
-      ;(window as any).addNotification({
+      ; (window as any).addNotification({
         type: 'success',
         title: 'Agent Ready!',
         message: `Your agent scored ${avgScore.toFixed(1)}% and is ready to deploy.`,
@@ -132,7 +160,7 @@ function TestContent() {
   return (
     <div className="min-h-screen bg-[#0A0E27]">
       <Navbar />
-      
+
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -161,7 +189,7 @@ function TestContent() {
             {/* Agent Info */}
             <div className="bg-[#0F1422] rounded-2xl border border-[#1A1F3A] p-6">
               <h2 className="text-2xl font-bold text-white mb-4">Agent Information</h2>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-sm text-gray-400 mb-1">Game Type</div>
@@ -218,14 +246,12 @@ function TestContent() {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${
-                            result.match ? 'bg-green-400' : 'bg-red-400'
-                          }`} />
+                          <div className={`w-3 h-3 rounded-full ${result.match ? 'bg-green-400' : 'bg-red-400'
+                            }`} />
                           <span className="font-semibold text-white">{result.scenario}</span>
                         </div>
-                        <span className={`font-bold ${
-                          result.match ? 'text-green-400' : 'text-red-400'
-                        }`}>
+                        <span className={`font-bold ${result.match ? 'text-green-400' : 'text-red-400'
+                          }`}>
                           {result.score}%
                         </span>
                       </div>
@@ -259,19 +285,18 @@ function TestContent() {
             {testResults.length > 0 && (
               <div className="bg-[#0F1422] rounded-2xl border border-[#1A1F3A] p-6">
                 <h3 className="text-lg font-bold text-white mb-4">Overall Score</h3>
-                
+
                 <div className="text-center mb-4">
                   <div className="text-5xl font-bold text-arbitrum-cyan mb-2">
                     {overallScore.toFixed(1)}%
                   </div>
-                  <div className={`text-sm font-semibold ${
-                    overallScore >= 80 ? 'text-green-400' :
-                    overallScore >= 60 ? 'text-yellow-400' :
-                    'text-red-400'
-                  }`}>
+                  <div className={`text-sm font-semibold ${overallScore >= 80 ? 'text-green-400' :
+                      overallScore >= 60 ? 'text-yellow-400' :
+                        'text-red-400'
+                    }`}>
                     {overallScore >= 80 ? 'Ready to Deploy!' :
-                     overallScore >= 60 ? 'Needs Improvement' :
-                     'Not Ready'}
+                      overallScore >= 60 ? 'Needs Improvement' :
+                        'Not Ready'}
                   </div>
                 </div>
 
@@ -280,11 +305,10 @@ function TestContent() {
                     initial={{ width: 0 }}
                     animate={{ width: `${overallScore}%` }}
                     transition={{ duration: 0.5 }}
-                    className={`h-full ${
-                      overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-                      overallScore >= 60 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
-                      'bg-gradient-to-r from-red-500 to-pink-500'
-                    }`}
+                    className={`h-full ${overallScore >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
+                        overallScore >= 60 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
+                          'bg-gradient-to-r from-red-500 to-pink-500'
+                      }`}
                   />
                 </div>
 

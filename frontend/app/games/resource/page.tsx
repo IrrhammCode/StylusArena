@@ -410,12 +410,61 @@ export default function ResourceGamePage() {
       return
     }
     setIsTraining(true)
-    toast.loading('Starting AI training...', { id: 'training' })
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const mockTrainingId = 'train_' + Date.now();
+    toast.loading('Analyzing yield strategy...', { id: 'training' })
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // --- Real World Yield Strategy Derivation ---
+
+    // 1. Calculate Metrics
+    const optimizeActions = gameplayData.filter(d => d.action === 'optimize').length
+    const produceActions = gameplayData.filter(d => d.action === 'produce').length
+    const upgradeActions = gameplayData.filter(d => d.action === 'upgrade').length
+    const totalActions = gameplayData.length || 1
+
+    const avgResources = gameplayData.reduce((sum, d) => sum + d.gameState.resources, 0) / gameplayData.length
+
+    // 2. Identify Strategy
+    // High Optimize = APY Chaser (Maximizer). High Produce = Gas Saver (Manual/Cheap). High Upgrade = Compounder.
+    let strategyType = "Balanced Yield"
+    if (optimizeActions / totalActions > 0.3) strategyType = "APY Maximizer"
+    else if (produceActions / totalActions > 0.5) strategyType = "Gas Saver"
+    else if (upgradeActions / totalActions > 0.3) strategyType = "Auto-Compounder"
+
+    // Resource Float -> Liquidity Preference
+    // Low float = Aggressive (Reinvesting everything). High float = Conservative (Keeping buffer).
+    const liquidityPreference = avgResources < 200 ? "Low Liquidity (Aggressive)" : "High Liquidity (Conservative)"
+
+    // 3. Generate Config
+    const realWorldConfig = {
+      agentName: "YieldBot Gen 1",
+      description: `Generated from ${gameplayData.length} optimization decisions`,
+      parameters: {
+        strategyType: strategyType, // Gas Saver, APY Maximizer, Compounder
+        liquidityPreference: liquidityPreference,
+        gasStrategy: strategyType === "Gas Saver" ? "Low (10 gwei)" : "Standard (Auto)",
+        riskLevel: liquidityPreference.includes("Aggressive") ? "High" : "Low",
+        targetPools: ["AAVE", "Compound", "Yearn"]
+      },
+      timestamp: Date.now()
+    }
+
+    const newTrainingId = 'train_' + Date.now();
+    localStorage.setItem('stylus_yield_strategy', JSON.stringify({
+      id: newTrainingId,
+      timestamp: Date.now(),
+      parameters: {
+        strategyType: strategyType, // Use the derived strategyType
+        liquidityPreference: liquidityPreference, // Use the derived liquidityPreference
+        gasStrategy: realWorldConfig.parameters.gasStrategy, // Use the derived gasStrategy
+        riskLevel: realWorldConfig.parameters.riskLevel // Use the derived riskLevel
+      }
+    }))
     toast.dismiss('training')
-    toast.success('Training started!')
-    window.location.href = `/training?id=${mockTrainingId}`
+    toast.success(`Strategy Generated: ${strategyType}`)
+
+    setTimeout(() => {
+      window.location.href = `/training?id=${newTrainingId}&type=resource`
+    }, 1000)
   }
 
   // Music control (re-added for completeness)
@@ -484,19 +533,19 @@ export default function ResourceGamePage() {
             <button
               onClick={() => setIsAIPlaying(!isAIPlaying)}
               className={`px-6 py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                  ? 'bg-indigo-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.5)] animate-pulse'
-                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                ? 'bg-indigo-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.5)] animate-pulse'
+                : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
                 }`}
             >
               {isAIPlaying ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  AI OPTIMIZING...
+                  AI AUTO-PILOT ON
                 </>
               ) : (
                 <>
-                  <span>⚡</span>
-                  Watch AI Optimize
+                  <span>🤖</span>
+                  ENABLE AI AUTO-PILOT
                 </>
               )}
             </button>

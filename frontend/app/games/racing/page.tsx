@@ -44,14 +44,39 @@ export default function RacingGamePage() {
 
   // AI Autopilot State
   const [isAIPlaying, setIsAIPlaying] = useState(false)
+  const [replayData, setReplayData] = useState<GameplayData[]>([])
+  const replayIndexRef = useRef(0)
 
   // Ref to access current state inside Phaser closure
   const isAIPlayingRef = useRef(isAIPlaying)
+  const isPlayingRef = useRef(isPlaying)
+  const activeReplayDataRef = useRef<GameplayData[]>([])
+  const replayStartTimeRef = useRef(0)
+
+  // Game Mode Selection
+  const [isModeSelected, setIsModeSelected] = useState(false)
+
   useEffect(() => {
     isAIPlayingRef.current = isAIPlaying
   }, [isAIPlaying])
 
   useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
+
+  useEffect(() => {
+    activeReplayDataRef.current = replayData
+  }, [replayData])
+
+  useEffect(() => {
+    if (isPlaying) {
+      replayStartTimeRef.current = Date.now()
+      replayIndexRef.current = 0
+    }
+  }, [isPlaying])
+
+  useEffect(() => {
+    if (!isModeSelected) return // Wait for mode selection
     if (!gameRef.current || phaserGameRef.current) return
 
     // Check if Phaser is loaded
@@ -118,7 +143,7 @@ export default function RacingGamePage() {
 
           // Controls
           const cursors = scene.input.keyboard?.createCursorKeys()
-          const wasd = scene.input.keyboard?.addKeys('W,S,A,D')
+          const wasd: any = scene.input.keyboard?.addKeys('W,S,A,D')
 
           // Update score display
           const updateScore = (points: number) => {
@@ -156,9 +181,24 @@ export default function RacingGamePage() {
             setGameplayData([...gameData])
           }
 
+          // Deterministic RNG for Ghost Mode consistency
+          class SeededRNG {
+            seed: number;
+            constructor(seed: number) { this.seed = seed; }
+            next() {
+              this.seed = (this.seed * 9301 + 49297) % 233280;
+              return this.seed / 233280;
+            }
+            between(min: number, max: number) {
+              return Math.floor(this.next() * (max - min + 1)) + min;
+            }
+          }
+          const rng = new SeededRNG(1337); // Fixed seed for identical levels
+
           // Spawn obstacles (neon barriers)
           const spawnObstacle = () => {
-            const x = Phaser.Math.Between(150, 650)
+            if (!isPlayingRef.current) return
+            const x = rng.between(150, 650)
             const obstacle = scene.add.rectangle(x, -50, 60, 60, 0xff0044)
             obstacle.setStrokeStyle(3, 0xff0088)
             scene.physics.add.existing(obstacle)
@@ -167,7 +207,8 @@ export default function RacingGamePage() {
 
           // Spawn coins (glowing orbs)
           const spawnCoin = () => {
-            const x = Phaser.Math.Between(150, 650)
+            if (!isPlayingRef.current) return
+            const x = rng.between(150, 650)
             const coin = scene.add.circle(x, -50, 15, 0xffd700)
             const glow = scene.add.circle(x, -50, 25, 0xffd700, 0.3)
               ; (coin as any).glow = glow
@@ -177,8 +218,9 @@ export default function RacingGamePage() {
 
           // Spawn power-ups
           const spawnPowerUp = () => {
-            if (Math.random() < 0.3) { // 30% chance
-              const x = Phaser.Math.Between(300, 500)
+            if (!isPlayingRef.current) return
+            if (rng.next() < 0.3) { // 30% chance
+              const x = rng.between(300, 500)
               const powerUp = scene.add.rectangle(x, -30, 35, 35, 0xff00ff)
               powerUps.push(powerUp)
             }
@@ -205,54 +247,84 @@ export default function RacingGamePage() {
 
           // Game update loop - register as scene method
           scene.update = function () {
+            if (!isPlayingRef.current) return
+
             // Scroll road for motion effect
             road.tilePositionY -= speed * 2
 
-            // AI Logic
+            // AI Logic (Data-Driven Replay)
             const aiActive = isAIPlayingRef.current;
             let aiMove = 0;
 
-            if (aiActive) {
+            if (aiActive && activeReplayDataRef.current.length > 0) {
+              // We need a stable reference to replay data inside the loop
+              // Using a ref for replayData to avoid closure staleness if we were using state directly
+              // But here we can just use the state if we update the ref in useEffect?
+              // Actually we need to access `replayData` which is state.
+              // Let's assume we pass it via a ref or similar mechanism.
+              // Update: We will use a ref for replayData.
+
+              const elapsedTime = Date.now() - replayStartTimeRef.current;
+
+              // Simple replay: Find next action that should have happened by now
+              while (
+                replayIndexRef.current < activeReplayDataRef.current.length &&
+                (activeReplayDataRef.current[replayIndexRef.current].timestamp - activeReplayDataRef.current[0].timestamp) <= elapsedTime
+              ) {
+                const actionData = activeReplayDataRef.current[replayIndexRef.current];
+
+                // Process Action
+                if (actionData.action === 'move_left') {
+                  aiMove = -1; // Trigger move left frame
+                } else if (actionData.action === 'move_right') {
+                  aiMove = 1; // Trigger move right frame
+                }
+
+                replayIndexRef.current++;
+              }
+
+              // Improve smooth movement: if we just set aiMove to -1/1 for a single frame it might be jerky.
+              // In the original recording, we record 'move_left' EVERY FRAME the key is down?
+              // Let's check recording logic:
+              // if (cursors.left.isDown) ... recordAction('move_left')
+              // Yes, it records every frame. So replay should work frame-by-frame.
+
+              // However, we need to persist the move for the current frame
+              if (replayIndexRef.current > 0) {
+                const lastAction = activeReplayDataRef.current[replayIndexRef.current - 1];
+                // If the last processed action was very recent (e.g. this frame), use it
+                // But since we iterate through ALL past actions, the last one is the most relevant state?
+                // Actually, 'action' is just an event.
+
+                if (lastAction.action === 'move_left') aiMove = -1;
+                if (lastAction.action === 'move_right') aiMove = 1;
+              }
+            } else if (aiActive) {
+              // Fallback: Simple heuristic behaviors if no data loaded (or keep existing logic as backup?)
+              // User specifically asked for "Ghost Mode" based on data.
+              // If no data, maybe just drive straight?
+              // Let's keep the obstacle avoidance as a fallback "Auto-Pilot" if no data is uploaded, 
+              // BUT the UI says "Upload Data to Enable". So maybe we don't need fallback.
+              // Lets leave the fallback for now but make it weaker or just basic centering.
+
               // Find closest threat
               let closestObstacle: any = null
               let minDist = 1000
 
               obstacles.forEach((obs: any) => {
-                const dist = player.y - obs.y
-                // dist is positive if player is below obstacle (normal)
-                // We want obstacles ABOVE player, so obs.y < player.y.
-                // Wait, player Y is 500. Obstacles start at -50 and go UP to 600+. 
-                // So we want obstacles with Y < 500, but closest to 500.
-
-                // Phaser coordinates: 0 is top. 600 is bottom.
-                // Player is at 500.
-                // Obstacles spawn at -50 (top) and move down (increment Y).
-                // So we look for obstacles with Y < 500.
-
-                const diff = player.y - obs.y // Positive means obstacle is above player
+                const diff = player.y - obs.y
                 if (diff > 0 && diff < minDist) {
                   minDist = diff
                   closestObstacle = obs
                 }
               })
 
-              if (closestObstacle && minDist < 250) { // React when obstacle is within 250px
-                // Avoidance logic
+              if (closestObstacle && minDist < 200) {
                 const dx = player.x - closestObstacle.x
-                if (Math.abs(dx) < 80) { // If horizontally overlapping
-                  // Too close! Move away
-                  if (dx > 0) aiMove = 1 // Player is to the right of obstacle, move right
-                  else aiMove = -1       // Player is to the left, move left
-                } else {
-                  // Safe from immediate threat.
-                  // Simple centering behavior to avoid hugging walls
-                  if (player.x < 300) aiMove = 0.3
-                  else if (player.x > 500) aiMove = -0.3
+                if (Math.abs(dx) < 80) {
+                  if (dx > 0) aiMove = 1
+                  else aiMove = -1
                 }
-              } else {
-                // No immediate threat, slightly drift to center
-                if (player.x < 380) aiMove = 0.2
-                else if (player.x > 420) aiMove = -0.2
               }
             }
 
@@ -328,8 +400,8 @@ export default function RacingGamePage() {
                   const particle = scene.add.circle(coin.x, coin.y, 5, 0xffd700)
                   scene.tweens.add({
                     targets: particle,
-                    x: coin.x + Phaser.Math.Between(-50, 50),
-                    y: coin.y + Phaser.Math.Between(-50, 50),
+                    x: coin.x + rng.between(-50, 50),
+                    y: coin.y + rng.between(-50, 50),
                     alpha: 0,
                     scale: 0,
                     duration: 500,
@@ -361,8 +433,8 @@ export default function RacingGamePage() {
                 powerUp.destroy()
                 powerUps.splice(index, 1)
 
-                // Random power-up effect
-                const powerUpType = Phaser.Math.Between(0, 2)
+                // Random power-up effect (Deterministic)
+                const powerUpType = rng.between(0, 2)
                 if (powerUpType === 0) {
                   // Speed boost
                   speed = Math.max(2, speed - 0.5)
@@ -413,7 +485,12 @@ export default function RacingGamePage() {
             }
           }
 
-          setIsPlaying(true)
+
+          // Only auto-start if NOT in AI mode.
+          // In AI Mode, we wait for data upload.
+          if (!isAIPlayingRef.current) {
+            setIsPlaying(true)
+          }
         }
       }
     }
@@ -438,7 +515,7 @@ export default function RacingGamePage() {
         gameAudioRef.current.cleanup()
       }
     }
-  }, [isMusicPlaying, musicVolume])
+  }, [isMusicPlaying, musicVolume, isModeSelected])
 
   const [currentTime, setCurrentTime] = useState<string>('')
 
@@ -475,6 +552,7 @@ export default function RacingGamePage() {
 
     // Also reset AI mode
     setIsAIPlaying(false)
+    setIsModeSelected(false)
 
     // Destroy existing game
     if (phaserGameRef.current) {
@@ -494,38 +572,121 @@ export default function RacingGamePage() {
     }, 100)
   }
 
-  const handleStartTraining = async () => {
-    if (gameplayData.length === 0) {
-      toast.error('Play the game first to collect training data!')
-      return
-    }
 
-    setIsTraining(true)
-    toast.loading('Starting AI training...', { id: 'training' })
 
-    try {
-      // Direct simulation of backend call for now (since we removed backend)
-      await new Promise(resolve => setTimeout(resolve, 1500));
+  // Download collected data as JSON
+  const handleDownloadData = () => {
+    if (gameplayData.length === 0) return
 
-      const mockTrainingId = 'train_' + Date.now();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameplayData))
+    const downloadAnchorNode = document.createElement('a')
+    downloadAnchorNode.setAttribute("href", dataStr)
+    downloadAnchorNode.setAttribute("download", "racing_agent_data.json")
+    document.body.appendChild(downloadAnchorNode) // required for firefox
+    downloadAnchorNode.click()
+    downloadAnchorNode.remove()
 
-      toast.dismiss('training')
-      toast.success('Training started! Redirecting to training page...')
+    toast.success('Training data downloaded!')
+  }
 
-      // Redirect to training page with training ID
-      setTimeout(() => {
-        window.location.href = `/training?id=${mockTrainingId}`
-      }, 1000)
-    } catch (error: any) {
-      toast.dismiss('training')
-      toast.error(error.message || 'Failed to start training')
-      setIsTraining(false)
+  // Upload JSON data for Replay
+  const handleUploadData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader()
+    if (event.target.files && event.target.files[0]) {
+      fileReader.readAsText(event.target.files[0], "UTF-8")
+      fileReader.onload = (e) => {
+        try {
+          if (e.target?.result) {
+            const parsedData = JSON.parse(e.target.result as string) as GameplayData[]
+            if (Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0].action) {
+              setReplayData(parsedData)
+              toast.success(`Loaded ${parsedData.length} actions! AI ready to replay.`)
+              // Keep AI Active, just wait for Start
+            } else {
+              toast.error('Invalid data format')
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing JSON:", error)
+          toast.error('Failed to parse JSON file')
+        }
+      }
     }
   }
 
   return (
     <div className="min-h-screen bg-[#0A0E27] text-white">
       <Navbar />
+
+      {/* Mode Selection Overlay */}
+      <AnimatePresence>
+        {!isModeSelected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E27]/95 backdrop-blur-sm p-4"
+          >
+            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Manual Mode Card */}
+              <motion.button
+                whileHover={{ scale: 1.02, borderColor: '#00D9FF' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsModeSelected(true)}
+                className="group relative h-[400px] rounded-2xl border-2 border-[#1A1F3A] bg-[#0F1422] p-8 text-left transition-all overflow-hidden flex flex-col justify-between hover:shadow-[0_0_30px_rgba(0,217,255,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-xl bg-blue-500/10 flex items-center justify-center mb-6">
+                    <TrophyIcon className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-2">Manual Pilot</h3>
+                  <p className="text-gray-400 leading-relaxed">
+                    Take full control of the vehicle. Test your reflexes, dodge obstacles, and compete for the high score manually.
+                  </p>
+                </div>
+                <div className="relative z-10 flex items-center text-blue-400 font-bold group-hover:translate-x-2 transition-transform">
+                  START ENGINE <span className="ml-2">→</span>
+                </div>
+              </motion.button>
+
+              {/* Data/AI Mode Card */}
+              <motion.button
+                whileHover={{ scale: 1.02, borderColor: '#9333EA' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setIsAIPlaying(true)
+                  setIsModeSelected(true)
+                }}
+                className="group relative h-[400px] rounded-2xl border-2 border-[#1A1F3A] bg-[#0F1422] p-8 text-left transition-all overflow-hidden flex flex-col justify-between hover:shadow-[0_0_30px_rgba(147,51,234,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6">
+                    <ZapIcon className="w-8 h-8 text-purple-400" />
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-2">Play by Data</h3>
+                  <p className="text-gray-400 leading-relaxed">
+                    Train your AI Agent. Upload recorded gameplay data and watch the Ghost Mode mimic your best performance.
+                  </p>
+                </div>
+                <div className="relative z-10 flex items-center text-purple-400 font-bold group-hover:translate-x-2 transition-transform">
+                  INITIALIZE SYSTEM <span className="ml-2">→</span>
+                </div>
+
+                {/* Badge */}
+                <div className="absolute top-6 right-6 px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/30 text-xs text-purple-300 font-mono">
+                  GHOST MODE
+                </div>
+              </motion.button>
+
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
 
       {/* Hero Header */}
       <div className="relative h-[250px] w-full border-b border-[#1A1F3A] overflow-hidden group mb-8">
@@ -546,11 +707,25 @@ export default function RacingGamePage() {
                   CryptoRacer <span className="text-2xl text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-red-500 font-extrabold italic">GT</span>
                 </h1>
               </div>
-              <Link href="/games">
-                <button className="px-4 py-2 bg-[#0A0E27]/50 backdrop-blur-md border border-[#2A2F4A] hover:bg-[#1A1F3A] rounded-lg text-sm text-gray-300 transition-all">
-                  Exit to Library [ESC]
-                </button>
-              </Link>
+              <div className="flex gap-3">
+                {!isAIPlaying && isModeSelected && (
+                  <button
+                    onClick={() => {
+                      const trainingId = `race_${Date.now()}`
+                      window.location.href = `/training?id=${trainingId}`
+                    }}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] text-white font-bold rounded-lg transition-all flex items-center gap-2 animate-pulse"
+                  >
+                    <ZapIcon className="w-4 h-4" />
+                    Train AI Agent
+                  </button>
+                )}
+                <Link href="/games">
+                  <button className="px-4 py-2 bg-[#0A0E27]/50 backdrop-blur-md border border-[#2A2F4A] hover:bg-[#1A1F3A] rounded-lg text-sm text-gray-300 transition-all">
+                    Exit to Library [ESC]
+                  </button>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -610,11 +785,53 @@ export default function RacingGamePage() {
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="absolute top-10 w-full flex justify-center pointer-events-none"
+                    className="absolute top-10 w-full flex justify-center pointer-events-none z-20"
                   >
                     <div className="bg-purple-600/80 backdrop-blur border border-purple-400 text-white px-6 py-2 rounded-full font-bold font-mono flex items-center gap-2 shadow-[0_0_20px_rgba(147,51,234,0.5)]">
                       <span className="w-2 h-2 bg-white rounded-full animate-ping" />
                       AI AUTOPILOT ENGAGED
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Waiting for Data Overlay */}
+              <AnimatePresence>
+                {isAIPlaying && !isPlaying && !isGameOver && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-[2px]"
+                  >
+                    <div className="bg-[#0F1422] border border-[#2A2F4A] p-6 rounded-2xl flex flex-col items-center gap-4 max-w-sm text-center shadow-2xl pointer-events-auto">
+                      <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center mb-2">
+                        <ZapIcon className="w-6 h-6 text-purple-400 animate-pulse" />
+                      </div>
+                      <h3 className="text-xl font-bold text-white">Ghost Mode Ready</h3>
+
+                      {replayData.length > 0 ? (
+                        <div className="flex flex-col items-center gap-3">
+                          <p className="text-sm text-green-400">
+                            Data loaded: {replayData.length} actions.
+                          </p>
+                          <button
+                            onClick={() => setIsPlaying(true)}
+                            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/30 transition-all animate-bounce"
+                          >
+                            START SIMULATION
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-400">
+                            System initialized. Upload data to begin the simulation.
+                          </p>
+                          <div className="text-xs text-purple-400 font-mono animate-pulse border border-purple-500/30 px-3 py-1 rounded bg-purple-500/10">
+                            WAITING FOR SIGNAL...
+                          </div>
+                        </>
+                      )}
                     </div>
                   </motion.div>
                 )}
@@ -700,14 +917,16 @@ export default function RacingGamePage() {
                 AI Context
               </h3>
               <p className="text-sm text-gray-300 leading-relaxed max-w-sm mb-4">
-                This simulation trains decision-making for high-frequency trading.
+                Train your Agent by playing manually first.
                 <br /><br />
-                <strong className="text-white">Obstacles</strong> = Market Crushes<br />
-                <strong className="text-white">Coins</strong> = Profit Opportunities<br />
-                <strong className="text-white">Movement</strong> = Position Adjustments
+                1. <strong>Play</strong> the game to record moves.
+                <br />
+                2. <strong>Download</strong> the training data.
+                <br />
+                3. <strong>Upload</strong> it back to see the AI mimic you!
               </p>
               <div className="flex gap-2 text-xs">
-                <span className="px-2 py-1 bg-[#0A0E27]/50 rounded text-indigo-300 border border-indigo-500/30">Reinforcement Learning</span>
+                <span className="px-2 py-1 bg-[#0A0E27]/50 rounded text-indigo-300 border border-indigo-500/30">Imitation Learning</span>
                 <span className="px-2 py-1 bg-[#0A0E27]/50 rounded text-indigo-300 border border-indigo-500/30">Stylus Compatible</span>
               </div>
             </div>
@@ -719,10 +938,10 @@ export default function RacingGamePage() {
                   Data Telemetry
                   <span className="text-xs font-normal text-gray-500 bg-[#1A1F3A] px-2 py-0.5 rounded-full">{gameplayData.length} pts</span>
                 </h3>
-                {isTraining ? (
-                  <div className="text-xs text-green-400 animate-pulse">UPLOADING...</div>
-                ) : (
-                  <div className="text-xs text-yellow-500">BUFFERING</div>
+                {replayData.length > 0 && (
+                  <div className="text-xs text-green-400 border border-green-500/50 px-2 py-0.5 rounded-full">
+                    Training Data Loaded ({replayData.length})
+                  </div>
                 )}
               </div>
 
@@ -749,48 +968,68 @@ export default function RacingGamePage() {
               </div>
 
               <div className="p-4 border-t border-[#1A1F3A] space-y-3">
+
+                {/* Action Buttons Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Download Button */}
+                  <button
+                    onClick={handleDownloadData}
+                    disabled={gameplayData.length === 0}
+                    className="px-4 py-3 bg-[#1A1F3A] hover:bg-[#252B45] text-white font-bold rounded-xl border border-[#2A2F4A] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-arbitrum-cyan group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span className="text-sm">Download</span>
+                  </button>
+
+                  {/* Upload Button */}
+                  <label className="px-4 py-3 bg-[#1A1F3A] hover:bg-[#252B45] text-white font-bold rounded-xl border border-[#2A2F4A] transition-all flex items-center justify-center gap-2 cursor-pointer group">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleUploadData}
+                      className="hidden"
+                    />
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-400 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span className="text-sm">Upload</span>
+                  </label>
+                </div>
+
                 {/* AI Autopilot Toggle */}
                 <button
                   onClick={() => setIsAIPlaying(!isAIPlaying)}
-                  disabled={!isPlaying}
+                  disabled={!isPlaying || replayData.length === 0}
                   className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                      ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
-                      : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                    ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                    : replayData.length === 0
+                      ? 'bg-[#1A1F3A] text-gray-500 border border-[#2A2F4A] cursor-not-allowed'
+                      : 'bg-[#1A1F3A] text-white hover:bg-[#252B45] border border-purple-500/50 shadow-[0_0_15px_rgba(147,51,234,0.2)]'
                     }`}
                 >
                   {isAIPlaying ? (
                     <>
                       <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      AI DRIVING...
+                      AI GHOST MODE ACTIVE
+                    </>
+                  ) : replayData.length === 0 ? (
+                    <>
+                      <span>⚠️</span>
+                      UPLOAD DATA ENABLE AI
                     </>
                   ) : (
                     <>
                       <span>🤖</span>
-                      Watch AI Play
+                      ENABLE AI GHOST MODE
                     </>
                   )}
                 </button>
 
-                <button
-                  onClick={handleStartTraining}
-                  disabled={gameplayData.length === 0 || isTraining}
-                  className="w-full py-3 bg-gradient-to-r from-arbitrum-cyan to-blue-600 text-[#0A0E27] font-bold rounded-xl hover:shadow-[0_0_20px_rgba(0,217,255,0.3)] disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-                >
-                  {isTraining ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-[#0A0E27] border-t-transparent rounded-full animate-spin" />
-                      Training Neural Net...
-                    </>
-                  ) : (
-                    <>
-                      <ZapIcon className="w-5 h-5" />
-                      Train Agent Now
-                    </>
-                  )}
-                </button>
-                {gameplayData.length > 0 && !isTraining && (
-                  <p className="text-[10px] text-center text-gray-500 mt-2">
-                    Ready to export {gameplayData.length} data points to Stylus VM
+                {replayData.length > 0 && !isAIPlaying && (
+                  <p className="text-[10px] text-center text-green-400 mt-2">
+                    Ready to replay {replayData.length} actions from uploaded data
                   </p>
                 )}
               </div>

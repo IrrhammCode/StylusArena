@@ -70,6 +70,7 @@ export default function ClickerGamePage() {
 
   // AI Autopilot State
   const [isAIPlaying, setIsAIPlaying] = useState(false)
+  const [isModeSelected, setIsModeSelected] = useState(false)
 
   // Initialize audio
   useEffect(() => {
@@ -530,19 +531,19 @@ export default function ClickerGamePage() {
             <button
               onClick={() => setIsAIPlaying(!isAIPlaying)}
               className={`px-6 py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                  ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
-                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                ? 'bg-purple-600 text-white shadow-[0_0_20px_rgba(147,51,234,0.5)] animate-pulse'
+                : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
                 }`}
             >
               {isAIPlaying ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  AI FARMING...
+                  AI AUTO-PILOT ON
                 </>
               ) : (
                 <>
-                  <span>⚡</span>
-                  Watch AI Farm
+                  <span>🤖</span>
+                  ENABLE AI AUTO-PILOT
                 </>
               )}
             </button>

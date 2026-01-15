@@ -135,7 +135,7 @@ export default function GamesPage() {
           >
             <div className="absolute inset-0 bg-gradient-to-r from-[#0A0E27] via-[#0A0E27]/80 to-transparent z-10" />
             <div className="absolute inset-0 z-0">
-              <Image src={games[0].image} alt={games[0].name} fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
+              <Image src={games[0].image} alt={games[0].name} fill sizes="(max-width: 768px) 100vw, 66vw" className="object-cover group-hover:scale-105 transition-transform duration-700" />
             </div>
 
             <div className="relative z-20 p-8 md:p-12 flex flex-col justify-center h-[500px] max-w-2xl">
@@ -181,6 +181,7 @@ export default function GamesPage() {
                   src={game.image}
                   alt={game.name}
                   fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#151a30] to-transparent" />

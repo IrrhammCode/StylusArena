@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Navbar } from '../../components/Navbar'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { GameAudio } from '../../../lib/gameAudio'
@@ -40,6 +40,16 @@ export default function StrategyGamePage() {
 
   // AI State
   const [isAIPlaying, setIsAIPlaying] = useState(false)
+  const isAIPlayingRef = useRef(isAIPlaying)
+
+  useEffect(() => {
+    isAIPlayingRef.current = isAIPlaying
+  }, [isAIPlaying])
+
+  const isPlayingRef = useRef(isPlaying)
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
 
   // Game Actions Ref
   const gameActionsRef = useRef<{
@@ -49,6 +59,9 @@ export default function StrategyGamePage() {
     getState: () => { currentStrategy: number, currentCase: any, optimalStrategy: number }
   } | null>(null)
 
+  // Mode Selection
+  const [isModeSelected, setIsModeSelected] = useState(false)
+
   const handleRestart = () => {
     // Reset all states
     setScore(0)
@@ -57,6 +70,7 @@ export default function StrategyGamePage() {
     setPredictionAccuracy(0)
     setGameplayData([])
     setIsAIPlaying(false)
+    setIsModeSelected(false)
 
     // Destroy existing game
     if (phaserGameRef.current) {
@@ -77,6 +91,7 @@ export default function StrategyGamePage() {
   }
 
   useEffect(() => {
+    if (!isModeSelected) return
     if (!gameRef.current || phaserGameRef.current || !Phaser) return
 
     // Initialize audio
@@ -93,7 +108,7 @@ export default function StrategyGamePage() {
       backgroundColor: '#0A0E27',
       scene: {
         create: function () {
-          const scene = this as Phaser.Scene
+          const scene = this as unknown as Phaser.Scene
 
           const background = scene.add.rectangle(400, 300, 800, 600, 0x1A1F3A)
 
@@ -252,7 +267,7 @@ export default function StrategyGamePage() {
 
             recordAction('plan')
             setStrategy(selectedStrategy)
-            if (!isAIPlaying) toast.info(`Strategy: ${strategies[selectedStrategy]}`)
+            if (!isAIPlaying) toast(`Strategy: ${strategies[selectedStrategy]}`, { icon: 'ℹ️' })
           }
 
           let correctPredictions = 0
@@ -374,7 +389,12 @@ export default function StrategyGamePage() {
             getState: () => ({ currentStrategy: selectedStrategy, currentCase: cases[currentCase], optimalStrategy: cases[currentCase].optimalStrategy })
           }
 
-          setIsPlaying(true)
+
+          // Only auto-start if NOT in AI mode
+          // In AI Mode, we wait for data upload.
+          if (!isAIPlayingRef.current) {
+            setIsPlaying(true)
+          }
         }
       }
     }
@@ -392,14 +412,50 @@ export default function StrategyGamePage() {
         gameAudioRef.current.cleanup()
       }
     }
-  }, [isMusicPlaying, musicVolume])
+  }, [isMusicPlaying, musicVolume, isModeSelected])
 
   // AI Logic
   useEffect(() => {
     if (!isAIPlaying || !gameActionsRef.current) return
 
     const thinkInterval = setInterval(() => {
+      // If game is not technically "playing" (e.g. waiting for start), do nothing
+      if (!isPlayingRef.current) return
+
       const state = gameActionsRef.current!.getState()
+
+      // --- Data-Driven Replay Logic ---
+      if (activeReplayDataRef.current.length > 0) {
+        const elapsedTime = Date.now() - replayStartTimeRef.current
+
+        // Find actions to execute
+        // Note: Strategy game is slower paced, actions might be sparse.
+        // We iterate through actions that happened up to this point
+
+        while (
+          replayIndexRef.current < activeReplayDataRef.current.length &&
+          (activeReplayDataRef.current[replayIndexRef.current].timestamp - activeReplayDataRef.current[0].timestamp) <= elapsedTime
+        ) {
+          const actionData = activeReplayDataRef.current[replayIndexRef.current]
+
+          // Execute Action
+          if (actionData.action === 'plan') {
+            // We recorded the strategy state AFTER plan.
+            // Ideally we should record the Target Strategy.
+            // "gameState.strategy" holds the new strategy.
+            gameActionsRef.current!.plan(actionData.gameState.strategy)
+          } else if (actionData.action === 'execute') {
+            gameActionsRef.current!.execute()
+          } else if (actionData.action === 'predict') {
+            gameActionsRef.current!.predict()
+          }
+
+          replayIndexRef.current++
+        }
+        return // Skip heuristic if replay is active
+      }
+
+      // --- Heuristic Fallback (Original Logic) ---
 
       // 1. Check Strategy
       if (state.currentStrategy !== state.optimalStrategy) {
@@ -416,29 +472,179 @@ export default function StrategyGamePage() {
         gameActionsRef.current!.execute()
       }
 
-    }, 500) // Fast reactions
+    }, 100) // Run faster loop for smoother replay check (100ms instead of 500ms)
 
     return () => clearInterval(thinkInterval)
   }, [isAIPlaying])
 
-  const handleStartTraining = async () => {
-    // ... same
-    if (gameplayData.length === 0) {
-      toast.error('Play the game first to collect training data!')
-      return
+  const [replayData, setReplayData] = useState<GameplayData[]>([])
+  const activeReplayDataRef = useRef<GameplayData[]>([])
+  const replayStartTimeRef = useRef(0)
+  const replayIndexRef = useRef(0)
+
+  // Sync ref
+  useEffect(() => {
+    activeReplayDataRef.current = replayData
+  }, [replayData])
+
+  // Reset replay on start
+  useEffect(() => {
+    // For Strategy game, "isPlaying" is true on mount usually?
+    // Check line 377: setIsPlaying(true) inside create.
+    // We might need to reset start time when AI is toggled ON.
+    if (isAIPlaying) {
+      replayStartTimeRef.current = Date.now()
+      replayIndexRef.current = 0
     }
-    setIsTraining(true)
-    toast.loading('Starting AI training...', { id: 'training' })
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const mockTrainingId = 'train_' + Date.now();
-    toast.dismiss('training')
-    toast.success('Training started!')
-    window.location.href = `/training?id=${mockTrainingId}`
+  }, [isAIPlaying])
+
+
+  const handleDownloadData = () => {
+    if (gameplayData.length === 0) return
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(gameplayData))
+    const downloadAnchorNode = document.createElement('a')
+    downloadAnchorNode.setAttribute("href", dataStr)
+    downloadAnchorNode.setAttribute("download", "strategy_agent_data.json")
+    document.body.appendChild(downloadAnchorNode)
+    downloadAnchorNode.click()
+    downloadAnchorNode.remove()
+    toast.success('Strategy data downloaded!')
+  }
+
+  const handleUploadData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader()
+    if (event.target.files && event.target.files[0]) {
+      fileReader.readAsText(event.target.files[0], "UTF-8")
+      fileReader.onload = (e) => {
+        try {
+          if (e.target?.result) {
+            const parsedData = JSON.parse(e.target.result as string) as GameplayData[]
+            if (Array.isArray(parsedData) && parsedData.length > 0 && parsedData[0].action) {
+              setReplayData(parsedData)
+              toast.success(`Strategy Model Loaded: ${parsedData.length} decision points.`)
+            } else {
+              toast.error('Invalid strategy data')
+            }
+          }
+        } catch (error) {
+          toast.error('Failed to parse JSON')
+        }
+      }
+    }
   }
 
   return (
     <div className="min-h-screen bg-[#0A0E27]">
       <Navbar />
+      <AnimatePresence>
+        {!isModeSelected && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#0A0E27]/95 backdrop-blur-sm p-4"
+          >
+            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Manual Mode Card */}
+              <motion.button
+                whileHover={{ scale: 1.02, borderColor: '#00D9FF' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsModeSelected(true)}
+                className="group relative h-[400px] rounded-2xl border-2 border-[#1A1F3A] bg-[#0F1422] p-8 text-left transition-all overflow-hidden flex flex-col justify-between hover:shadow-[0_0_30px_rgba(0,217,255,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-xl bg-blue-500/10 flex items-center justify-center mb-6">
+                    <span className="text-3xl">♟️</span>
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-2">Manual Strategy</h3>
+                  <p className="text-gray-400 leading-relaxed">
+                    Take command of the portfolio. Make real-time decisions on asset allocation, strategy shifts, and market predictions.
+                  </p>
+                </div>
+                <div className="relative z-10 flex items-center text-blue-400 font-bold group-hover:translate-x-2 transition-transform">
+                  ENTER WAR ROOM <span className="ml-2">→</span>
+                </div>
+              </motion.button>
+
+              {/* Data/AI Mode Card */}
+              <motion.button
+                whileHover={{ scale: 1.02, borderColor: '#9333EA' }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setIsAIPlaying(true)
+                  setIsModeSelected(true)
+                }}
+                className="group relative h-[400px] rounded-2xl border-2 border-[#1A1F3A] bg-[#0F1422] p-8 text-left transition-all overflow-hidden flex flex-col justify-between hover:shadow-[0_0_30px_rgba(147,51,234,0.2)]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative z-10">
+                  <div className="w-16 h-16 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6">
+                    <span className="text-3xl">🤖</span>
+                  </div>
+                  <h3 className="text-3xl font-bold text-white mb-2">Play by Data</h3>
+                  <p className="text-gray-400 leading-relaxed">
+                    Upload your strategic history. Watch the AI Agent replicate your decision-making patterns in the simulation.
+                  </p>
+                </div>
+                <div className="relative z-10 flex items-center text-purple-400 font-bold group-hover:translate-x-2 transition-transform">
+                  LOAD AGENT <span className="ml-2">→</span>
+                </div>
+
+                {/* Badge */}
+                <div className="absolute top-6 right-6 px-3 py-1 bg-purple-500/20 rounded-full border border-purple-500/30 text-xs text-purple-300 font-mono">
+                  GHOST MODE
+                </div>
+              </motion.button>
+
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Waiting for Data Overlay */}
+      <AnimatePresence>
+        {isAIPlaying && !isPlaying && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-[2px] pointer-events-none"
+          >
+            <div className="bg-[#0F1422] border border-[#2A2F4A] p-6 rounded-2xl flex flex-col items-center gap-4 max-w-sm text-center shadow-2xl pointer-events-auto">
+              <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center mb-2">
+                <span className="text-2xl">⚡</span>
+              </div>
+              <h3 className="text-xl font-bold text-white">Ghost Mode Ready</h3>
+
+              {replayData.length > 0 ? (
+                <div className="flex flex-col items-center gap-3">
+                  <p className="text-sm text-green-400">
+                    Data loaded: {replayData.length} decisions.
+                  </p>
+                  <button
+                    onClick={() => setIsPlaying(true)}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-500/30 transition-all animate-bounce"
+                  >
+                    START SIMULATION
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-400">
+                    System initialized. Upload data to begin the simulation.
+                  </p>
+                  <div className="text-xs text-purple-400 font-mono animate-pulse border border-purple-500/30 px-3 py-1 rounded bg-purple-500/10">
+                    WAITING FOR SIGNAL...
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-6">
@@ -447,15 +653,44 @@ export default function StrategyGamePage() {
               <h1 className="text-4xl font-bold text-white mb-2">StrategyMaster</h1>
               <p className="text-gray-400">Plan, execute, predict. Train your Strategy Agent!</p>
             </div>
-            <Link href="/games">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-4 py-2 bg-[#1A1F3A] hover:bg-[#252B45] text-gray-300 rounded-lg border border-[#2A2F4A] transition-all"
-              >
-                ← Back to Games
-              </motion.button>
-            </Link>
+            <div className="flex gap-3">
+              {!isAIPlaying && isModeSelected && (
+                <button
+                  onClick={() => {
+                    const newTrainingId = 'train_' + Date.now();
+                    const realWorldConfig = {
+                      portfolioType: ['Conservative', 'Balanced', 'Aggressive', 'Degen'][strategy] || 'Balanced',
+                      riskScore: 'Medium', // Default for now
+                      rebalanceFrequency: 'Daily',
+                      assetAllocation: {
+                        ETH: '40%',
+                        USDC: '40%',
+                        ARB: '20%'
+                      }
+                    }
+                    localStorage.setItem('stylus_strategy_config', JSON.stringify({
+                      id: newTrainingId,
+                      timestamp: Date.now(),
+                      parameters: realWorldConfig
+                    }))
+                    window.location.href = `/training?id=${newTrainingId}&type=strategy`
+                  }}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] text-white font-bold rounded-lg transition-all flex items-center gap-2 animate-pulse"
+                >
+                  <span className="text-xl">⚡</span>
+                  Train AI Agent
+                </button>
+              )}
+              <Link href="/games">
+                <motion.button
+                  whileHover={{ x: -4 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-4 py-2 bg-[#1A1F3A] hover:bg-[#252B45] text-gray-300 rounded-lg border border-[#2A2F4A] transition-all"
+                >
+                  ← Back to Games
+                </motion.button>
+              </Link>
+            </div>
           </div>
 
           <div className="flex gap-4 mb-6">
@@ -484,20 +719,28 @@ export default function StrategyGamePage() {
             {/* Autopilot Button */}
             <button
               onClick={() => setIsAIPlaying(!isAIPlaying)}
+              disabled={replayData.length === 0}
               className={`px-6 py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${isAIPlaying
-                  ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] animate-pulse'
-                  : 'bg-[#1A1F3A] text-gray-400 hover:bg-[#252B45] border border-[#2A2F4A]'
+                ? 'bg-green-600 text-white shadow-[0_0_20px_rgba(34,197,94,0.5)] animate-pulse'
+                : replayData.length === 0
+                  ? 'bg-[#1A1F3A] text-gray-500 border border-[#2A2F4A] cursor-not-allowed'
+                  : 'bg-[#1A1F3A] text-white hover:bg-[#252B45] border border-green-500/50'
                 }`}
             >
               {isAIPlaying ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                  AI CONQUERING...
+                  AI GHOST ACTIVE
+                </>
+              ) : replayData.length === 0 ? (
+                <>
+                  <span>⚠️</span>
+                  UPLOAD DATA FIRST
                 </>
               ) : (
                 <>
-                  <span>🎯</span>
-                  Watch AI Conquer
+                  <span>👻</span>
+                  ENABLE GHOST MODE
                 </>
               )}
             </button>
@@ -550,34 +793,48 @@ export default function StrategyGamePage() {
         </div>
 
         <div className="bg-[#0F1422] rounded-2xl border border-[#1A1F3A] p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-white mb-2">AI Training</h2>
-              <p className="text-sm text-gray-400">
-                {gameplayData.length > 0
-                  ? `${gameplayData.length} actions recorded. Ready to train AI!`
-                  : 'Play the game to collect training data.'}
-              </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-white mb-2">AI Data Center</h2>
+                <p className="text-sm text-gray-400">
+                  {gameplayData.length > 0
+                    ? `${gameplayData.length} strategic decisions recorded.`
+                    : 'Play manual games to build a training dataset.'}
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                {/* Download Button */}
+                <button
+                  onClick={handleDownloadData}
+                  disabled={gameplayData.length === 0}
+                  className="px-4 py-3 bg-[#1A1F3A] hover:bg-[#252B45] text-white font-bold rounded-xl border border-[#2A2F4A] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group"
+                >
+                  <span className="text-sm">Download Data</span>
+                </button>
+
+                {/* Upload Button */}
+                <label className="px-4 py-3 bg-[#1A1F3A] hover:bg-[#252B45] text-white font-bold rounded-xl border border-[#2A2F4A] transition-all flex items-center justify-center gap-2 cursor-pointer group">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleUploadData}
+                    className="hidden"
+                  />
+                  <span className="text-sm">Upload & Train</span>
+                </label>
+              </div>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleStartTraining}
-              disabled={gameplayData.length === 0 || isTraining}
-              className="px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all flex items-center gap-2"
-            >
-              {isTraining ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Training...
-                </>
-              ) : (
-                <>
-                  <span className="text-xl">🤖</span>
-                  Start Training
-                </>
-              )}
-            </motion.button>
+
+            {replayData.length > 0 && (
+              <div className="bg-green-500/10 border border-green-500/30 p-3 rounded-lg flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-green-400 font-mono text-sm">
+                  GHOST MODEL LOADED: {replayData.length} training points ready for AI replay.
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </main>

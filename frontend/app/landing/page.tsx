@@ -110,6 +110,7 @@ export default function LandingPage() {
                   alt="AI Training Arena"
                   width={800}
                   height={800}
+                  priority
                   className="w-full h-auto object-cover transform hover:scale-105 transition-transform duration-700"
                 />
 
@@ -160,7 +161,7 @@ export default function LandingPage() {
               className="group bg-[#1A1F3A] rounded-2xl border border-[#2A2F4A] overflow-hidden hover:border-arbitrum-cyan/50 transition-all"
             >
               <div className="h-48 overflow-hidden relative">
-                <Image src="/images/feature-training.png" alt="Training" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image src="/images/feature-training.png" alt="Training" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1A1F3A] to-transparent" />
               </div>
               <div className="p-8 relative">
@@ -180,7 +181,7 @@ export default function LandingPage() {
               className="group bg-[#1A1F3A] rounded-2xl border border-[#2A2F4A] overflow-hidden hover:border-arbitrum-cyan/50 transition-all"
             >
               <div className="h-48 overflow-hidden relative">
-                <Image src="/images/feature-battle.png" alt="Battle" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image src="/images/feature-battle.png" alt="Battle" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1A1F3A] to-transparent" />
               </div>
               <div className="p-8 relative">
@@ -200,7 +201,7 @@ export default function LandingPage() {
               className="group bg-[#1A1F3A] rounded-2xl border border-[#2A2F4A] overflow-hidden hover:border-arbitrum-cyan/50 transition-all"
             >
               <div className="h-48 overflow-hidden relative">
-                <Image src="/images/feature-marketplace.png" alt="Marketplace" fill className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                <Image src="/images/feature-marketplace.png" alt="Marketplace" fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1A1F3A] to-transparent" />
               </div>
               <div className="p-8 relative">
@@ -237,7 +238,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-gray-600 text-sm">
-            © 2024 Arbitrum Hackathon Project
+            © 2026 Arbitrum Hackathon Project
           </p>
         </div>
       </footer>

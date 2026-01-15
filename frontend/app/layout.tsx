@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+// Force rebuild: 1
 import { Providers } from './providers'
 import { Toaster } from './components/Toaster'
 
@@ -24,4 +25,3 @@ export default function RootLayout({
     </html>
   )
 }
-
