@@ -35,7 +35,7 @@ export function SafeConnectButton() {
 
     if (ConnectButton) {
       // If ConnectButton is loaded but not showing, force re-render
-      toast.info('Please wait, wallet is initializing...')
+      toast('Please wait, wallet is initializing...', { icon: 'ℹ️' })
       return
     }
 

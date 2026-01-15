@@ -110,12 +110,12 @@ export default function RacingGamePage() {
         }
       },
       scene: {
-        preload: function (this: Phaser.Scene) {
+        preload: function (this: any) {
           this.load.image('road', '/images/game-assets/racing-road.png')
           this.load.image('player', '/images/game-assets/racing-player.png')
           this.load.image('enemy', '/images/game-assets/racing-enemy.png')
         },
-        create: function (this: Phaser.Scene) {
+        create: function (this: any) {
           const scene = this
 
           // Create scrolling road background

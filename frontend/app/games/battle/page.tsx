@@ -104,7 +104,7 @@ export default function BattleGamePage() {
       parent: gameRef.current,
       backgroundColor: '#0a0e27',
       scene: {
-        create: function (this: Phaser.Scene) {
+        create: function (this: any) {
           const scene = this
 
           // Game state

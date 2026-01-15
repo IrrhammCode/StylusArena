@@ -95,7 +95,7 @@ export default function ResourceGamePage() {
       backgroundColor: '#0A0E27',
       scene: {
         create: function () {
-          const scene = this as Phaser.Scene
+          const scene = this as any
 
           const background = scene.add.rectangle(400, 300, 800, 600, 0x1A1F3A)
 
